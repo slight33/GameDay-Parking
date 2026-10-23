@@ -6,6 +6,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 import os
 # e.g. postgresql+psycopg://postgres:YOURPASSWORD@localhost:5432/gameday  (falls back to SQLite if unset)
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///gameday.db")
+for old in ("postgres://", "postgresql://"):
+    if DATABASE_URL.startswith(old):
+        DATABASE_URL = DATABASE_URL.replace(old, "postgresql+psycopg://", 1)
+        break
 engine = create_engine(
     DATABASE_URL, pool_pre_ping=True,
     **({"connect_args": {"check_same_thread": False}} if DATABASE_URL.startswith("sqlite") else {}),
