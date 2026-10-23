@@ -29,15 +29,6 @@ class User(Base):
     address: Mapped[str | None] = mapped_column(default=None)
 
 
-SEED_EVENTS = [
-    dict(id="v1", name="Bears vs Packers", venue="Soldier Field", date="2026-10-25", time="12:00", lat=41.8623, lng=-87.6167),
-    dict(id="v2", name="Bulls vs Celtics", venue="United Center", date="2026-11-02", time="19:30", lat=41.8807, lng=-87.6742),
-    dict(id="v3", name="Night Lights Concert", venue="Wrigley Field", date="2026-11-07", time="20:00", lat=41.9484, lng=-87.6553),
-]
 
-def init_db():
-    Base.metadata.create_all(engine)
-    with SessionLocal() as s:
-        if not s.query(Event).first():
-            s.add_all(Event(**e) for e in SEED_EVENTS)
-            s.commit()
+
+
