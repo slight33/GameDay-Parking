@@ -31,6 +31,8 @@ button[disabled]{opacity:.6;cursor:wait}button.alt{background:transparent;color:
   <div class="bay" id="card"></div>
 </main>
 <script>
+  // api to render backend
+const API = "https://gameday-parking.onrender.com";
 const card = document.getElementById("card");
 const TOKEN_KEY = "gdp-token";
 
@@ -63,7 +65,7 @@ async function onSubmit(e) {
   }
   btn.disabled = true;
   try {
-    const res = await fetch("/auth/login", {
+    const res = await fetch('${API}/auth/login', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password })
