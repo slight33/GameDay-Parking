@@ -49,6 +49,8 @@ a{color:var(--ink)}
   </div>
 </main>
 <script>
+// api to the render backend
+const API = "https://gameday-parking.onrender.com/"
 const f = document.getElementById("f"), msg = document.getElementById("msg");
 const FIELDS = ["name", "username", "email", "phone", "password"];
 
@@ -75,7 +77,7 @@ f.addEventListener("submit", async e => {
 
   btn.disabled = true;
   try {
-    const res = await fetch("/auth/signup", {
+    const res = await fetch(`${API}/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
