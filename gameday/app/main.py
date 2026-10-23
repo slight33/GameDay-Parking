@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 import bcrypt, jwt
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -14,19 +15,21 @@ from .models import SessionLocal, User, init_db
 
 
 SECRET = os.environ.get("JWT_SECRET", "dev-only-change-me")
-UPLOADS = Path("uploads"); UPLOADS.mkdir(exist_ok=True)
-HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
+STATIC = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(title="gamedayParking")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])  # tighten in prod
 bearer = HTTPBearer(auto_error=False)
 
 @app.on_event("startup")
-def _startup(): init_db()
+def _startup(): 
+    init_db()
 
 def get_db():
     with SessionLocal() as s:
         yield s
+
+
 DB = Annotated[Session, Depends(get_db)]
 
 # ---------- auth ----------
@@ -43,22 +46,31 @@ def current_user(db: DB, cred: Annotated[HTTPAuthorizationCredentials | None, De
     return u
 Me = Annotated[User, Depends(current_user)]
 
-def require_host(u: Me) -> User:
-    if u.role != "host": raise HTTPException(403, "Become a host first.")
-    return u
-Host = Annotated[User, Depends(require_host)]
+
 
 class SignupIn(BaseModel):
-    name: str = Field(min_length=1); username: str = Field(min_length=1)
-    email: EmailStr; phone: str = Field(min_length=1); password: str = Field(min_length=8)
+    name: str = Field(min_length=1); 
+    username: str = Field(min_length=1)
+    email: EmailStr; phone: str = Field(min_length=1); 
+    password: str = Field(min_length=8)
+
 class LoginIn(BaseModel):
-    username: str; password: str
+    username: str; 
+    password: str
 
 class UserOut(BaseModel):
-    id: str; name: str; username: str; email: str; phone: str; role: str; address: str | None
+    id: str; 
+    name: str; 
+    username: str; 
+    email: str; 
+    phone: str; 
+    role: str; 
+    address: str | None
     model_config = {"from_attributes": True}
+
 class TokenOut(BaseModel):
-    token: str; user: UserOut
+    token: str; 
+    user: UserOut
 
 @app.post("/auth/signup", response_model=TokenOut, status_code=201)
 def signup(d: SignupIn, db: DB):
@@ -68,7 +80,8 @@ def signup(d: SignupIn, db: DB):
         raise HTTPException(409, "An account with that email already exists.")
     u = User(name=d.name.strip(), username=d.username.strip().lower(), email=d.email.lower(),
              phone=d.phone.strip(), pw_hash=bcrypt.hashpw(d.password.encode(), bcrypt.gensalt()).decode())
-    db.add(u); db.commit()
+    db.add(u); 
+    db.commit()
     return TokenOut(token=make_token(u.id), user=u)
 
 @app.post("/auth/login", response_model=TokenOut)
@@ -79,12 +92,11 @@ def login(d: LoginIn, db: DB):
     return TokenOut(token=make_token(u.id), user=u)
 
 @app.get("/me", response_model=UserOut)
-def me(u: Me): return u
+def me(u: Me): 
+    return u
 
 
 # ---------- pages ----------
-from fastapi.responses import FileResponse
-STATIC = Path(__file__).resolve().parent.parent / "static"
 
 @app.get("/", include_in_schema=False)
 @app.get("/login", include_in_schema=False)
