@@ -28,51 +28,6 @@ class User(Base):
     role: Mapped[str] = mapped_column(default="guest")                      # guest | host
     address: Mapped[str | None] = mapped_column(default=None)
 
-class Event(Base):
-    __tablename__ = "events"
-    id: Mapped[str] = mapped_column(primary_key=True)
-    name: Mapped[str]
-    venue: Mapped[str]
-    date: Mapped[str]   # YYYY-MM-DD
-    time: Mapped[str]   # HH:MM
-    lat: Mapped[float]
-    lng: Mapped[float]
-
-class Listing(Base):
-    __tablename__ = "listings"
-    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: new_id("l"))
-    host_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    event_id: Mapped[str] = mapped_column(ForeignKey("events.id"), index=True)
-    address: Mapped[str]
-    price: Mapped[float]
-    start: Mapped[str]
-    end: Mapped[str]
-    overstay: Mapped[float] = mapped_column(default=0)
-    security: Mapped[str] = mapped_column(default="")
-    stacked: Mapped[bool] = mapped_column(default=False)
-    photo_path: Mapped[str | None] = mapped_column(default=None)
-    lat: Mapped[float]
-    lng: Mapped[float]
-    dist: Mapped[int]   # metres to venue
-    walk: Mapped[int]   # minutes
-    host: Mapped[User] = relationship()
-    event: Mapped[Event] = relationship()
-
-class Booking(Base):
-    __tablename__ = "bookings"
-    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: new_id("bk"))
-    listing_id: Mapped[str] = mapped_column(ForeignKey("listings.id"), index=True)
-    guest_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
-    date: Mapped[str]
-    start: Mapped[str]
-    end: Mapped[str]
-    plate: Mapped[str]
-    amount: Mapped[float]
-    last4: Mapped[str]
-    payment_ref: Mapped[str]
-    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    listing: Mapped[Listing] = relationship()
-    guest: Mapped[User] = relationship()
 
 SEED_EVENTS = [
     dict(id="v1", name="Bears vs Packers", venue="Soldier Field", date="2026-10-25", time="12:00", lat=41.8623, lng=-87.6167),
