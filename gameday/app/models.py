@@ -28,7 +28,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(default="guest")                      # guest | host
     address: Mapped[str | None] = mapped_column(default=None)
 
-
+def init_db():
+    Base.metadata.create_all(bind=engine)
 
 
 
