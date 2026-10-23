@@ -7,11 +7,11 @@ import bcrypt, jwt
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from .models import Booking, Event, Listing, SessionLocal, User, init_db
-from .services import PaymentError, charge_card, place
+from .models import SessionLocal, User, init_db
+
 
 SECRET = os.environ.get("JWT_SECRET", "dev-only-change-me")
 UPLOADS = Path("uploads"); UPLOADS.mkdir(exist_ok=True)
