@@ -107,7 +107,12 @@ def signup(d: SignupIn, db: DB):
     db.commit()
     return TokenOut(token=make_token(u.id), user=u)
 
-
+# What it does: Authenticates existing users at POST /auth/login.
+# Key details:
+	# Looks up the user by their lowercase/trimmed username.
+	# Verifies the submitted password against the stored bcrypt hash using bcrypt.checkpw().
+	# If the user doesn't exist or the password fails, it raises an HTTP 401 Unauthorized error.
+	# If valid, it generates and returns a new auth token and the user's data.
 @app.post("/auth/login", response_model=TokenOut)
 def login(d: LoginIn, db: DB):
     # Finds the user in the database by matching the lowercased, stripped username.

@@ -1,4 +1,4 @@
-# This is Ai generated code so I will explain what it does in segments
+# This is Ai generated code so we will explain what it does in segments
 # What it does: It pulls in external tools needed for the script.
 # uuid and datetime are standard Python libraries used later for generating IDs and managing timestamps.
 # The sqlalchemy imports provide core database operations and modern ORM (Object-Relational Mapping) features to map Python classes directly to database tables.
