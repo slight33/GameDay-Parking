@@ -1,3 +1,7 @@
+/* AI generation. CSS Custom Properties (Variables): Defines a color palette (--bg, --paper, --ink, --acc for accent yellow, --bad for errors, etc.) in the :root pseudo-class.
+ Dark Mode: Uses a media query (prefers-color-scheme: dark) to automatically switch color variables if the user's operating system is set to dark mode.
+ Layout & Elements: Styles the body, header bar with a dashed accent border, centered main content box (max-width: 460px), form inputs, focus rings, and buttons.
+*/
 :root{--bg:#E6E5E0;--paper:#F4F3EE;--ink:#16212C;--mute:#5B6670;--line:#16212C;--acc:#F2C230;--bad:#B3261E;--ok:#1F7A4D}
 @media (prefers-color-scheme:dark){:root{--bg:#14181D;--paper:#1D232A;--ink:#ECEAE3;--mute:#9AA5AF;--line:#4A5561;--bad:#FF8A80;--ok:#6FD3A0;color-scheme:dark}}
 *{box-sizing:border-box}

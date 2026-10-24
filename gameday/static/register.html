@@ -1,3 +1,7 @@
+<!--This is Ai generated code so I will explain it-->
+<!--Character Set & Viewport: Sets the encoding to UTF-8 and ensures the page scales properly on mobile devices.
+ External Font: Links to Google Fonts to load the "Barlow" and "Barlow Condensed" font families.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,11 +9,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Create account · gamedayParking</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@600;700&display=swap">
-
+# refence to the css stylesheet
 <link rel="stylesheet" href="/static/styles.css" >
 
 </head>
 <body>
+  # html strucutre
 <header>gamedayParking</header>
 <main>
   <h1>Create account</h1>
@@ -43,20 +48,25 @@ function fail(text, names = []) {
   msg.className = "msg bad"; msg.textContent = text;
   names.forEach(n => f[n].classList.add("err"));
 }
-
+// Runs when the user clicks "Create account" 
 f.addEventListener("submit", async e => {
   e.preventDefault();
   const btn = f.querySelector("button");
+  // Clear any errors left over from the last attempt
   f.querySelectorAll("input").forEach(i => i.classList.remove("err"));
   msg.className = "msg"; msg.textContent = "";
 
+  // Build the request body from the form, trimming extra spaces.
+  // Password is re-read untrimmed so spaces in it are kept.
   const body = {};
   FIELDS.forEach(n => body[n] = f[n].value.trim());
   body.password = f.password.value;
 
+  // frontend checks, no server call
   const empty = FIELDS.filter(n => !body[n]);
   if (empty.length) 
     return fail("Fill in every field.", empty);
+  // something@something.something
   if (!/^\S+@\S+\.\S+$/.test(body.email)) 
     return fail("Enter a valid email address.", ["email"]);
   if (body.password.length < 8) 
@@ -64,26 +74,33 @@ f.addEventListener("submit", async e => {
   if (body.password !== f.confirm.value)  
     return fail("Passwords don’t match.", ["password", "confirm"]);
 
+  // prevent double submits while waiting
   btn.disabled = true;
   try {
+    // Send the form as JSON to the signup endpoint on Render.
     const res = await fetch(`${API}/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
+    // Parse the JSON reply
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       // 409 gives a string message; 422 gives a list of field errors
       if (typeof data.detail === "string") {
+        // 409: highlight username or email depending on which one is taken.
         const hit = res.status === 409 ? [/username/i.test(data.detail) ? "username" : "email"] : [];
         return fail(data.detail, hit);
       }
+      // 422: each error's location ends with the field name, such as "body" or "email".
       const bad = Array.isArray(data.detail) ? data.detail.map(d => d.loc[d.loc.length - 1]) : [];
       return fail("Check the highlighted fields and try again.", bad.filter(n => FIELDS.includes(n)));
     }
+    // Success (201): save the login token in the browser and go to the login page.
     localStorage.setItem("gdp-token", data.token);
     window.location.href = "/login";   // login page shows the signed-in card
   } catch (err) {
+    //failed: server down, wrong URL, or no internet.
     fail("Couldn’t reach the server. Is it running?");
   } finally {
     btn.disabled = false;

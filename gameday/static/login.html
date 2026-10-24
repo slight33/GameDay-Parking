@@ -1,3 +1,9 @@
+<!-- This code is ai generated so i will be explaining it -->
+<!-- DOCTYPE & html: Tells the browser this is modern HTML5.
+Metadata: Sets character encoding to UTF-8 and makes the page mobile-responsive (viewport).
+Title: Sets the browser tab title to "Sign in  gamedayParking".
+ Google Fonts: Loads custom typography (Barlow and Barlow Condensed) from Google Fonts.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +13,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@600;700&display=swap">
 
 <link rel="stylesheet" href="/static/styles.css">
-
+<!-- Header: Displays the brand name gamedayParking at the top.
+ Main Container: Holds a heading (Sign in) and an empty <div> with id="card". The JavaScript code dynamically injects the login form or the user's welcome screen into this #card element.
+-->
 </head>
 <body>
 <header>gamedayParking</header>
@@ -15,6 +23,17 @@
   <h1>Sign in</h1>
   <div class="bay" id="card"></div>
 </main>
+<!-- Grabs the #card element and sets a constant key name (gdp-token) for saving the user's login token in localStorage.
+ showForm(): Replaces the HTML inside #card with a sign-in form containing username and password fields, a submit button, an error message container, and demo account hints (host1 or guest1).
+ Attaches a submit event listener to the form to run onSubmit().
+-->
+ <!-- e.preventDefault(): Stops the browser from doing a traditional page reload on form submit.
+ Validation: Checks if both username and password fields have text. If empty, it marks the inputs with an .err class and displays an error message.
+ API Request: Sends a POST request to /auth/login with the username and password formatted as JSON.
+ Error Handling: If the server returns an error (!res.ok), it displays the server's error message or a fallback message and highlights the input fields.
+ Success: Saves the received authentication token into browser localStorage under gdp-token and calls showWelcome(data.user).
+ Catch/Finally: Handles network failures and re-enables the submit button.
+-->
 <script>
   // api to render backend
 const API = "https://gameday-parking.onrender.com";
@@ -70,7 +89,10 @@ async function onSubmit(e) {
     btn.disabled = false;
   }
 }
+// showWelcome(u): Replaces the card contents with a greeting showing the user's first name, their role badge, and a Sign out button.
+//Sign Out: Deletes the gdp-token from localStorage and re-renders the login form by calling showForm().
 
+// If a token is already saved, check it and skip the form
 function showWelcome(u) {
   card.innerHTML = `
     <h2 style="font:700 1.7rem 'Barlow Condensed',sans-serif;margin:0 0 .4rem"></h2>
@@ -94,6 +116,12 @@ function showWelcome(u) {
   }
   showForm();
 })();
+// Runs immediately when the page loads.
+// Checks if a saved token (gdp-token) already exists in localStorage.
+// If a token exists, it pings the /me endpoint with a Bearer authorization header.
+// If the token is valid, it skips the login form and goes straight to showWelcome().
+// If invalid or missing, it clears any bad token and shows the login form via showForm().
+
 </script>
 </body>
 </html>
