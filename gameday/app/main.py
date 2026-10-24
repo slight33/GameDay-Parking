@@ -12,13 +12,14 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from .models import SessionLocal, User, init_db
-
+from fastapi.staticfiles import StaticFiles
 
 SECRET = os.environ.get("JWT_SECRET", "dev-only-change-me")
 STATIC = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(title="gamedayParking")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])  # tighten in prod
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
 bearer = HTTPBearer(auto_error=False)
 
 @app.on_event("startup")
