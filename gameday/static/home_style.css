@@ -134,6 +134,11 @@ body {
   font-weight: 600;
 }
 
+.home-link {
+  color: inherit;
+  text-decoration: none;
+}
+
 /* ---------- Event cards that link to the browse page ---------- */
 
 /* The card is now a link: white text on the asphalt, with room to breathe. */
