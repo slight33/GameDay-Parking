@@ -35,8 +35,8 @@ Title: Sets the browser tab title to "Sign in  gamedayParking".
  Catch/Finally: Handles network failures and re-enables the submit button.
 -->
 <script>
-  // api to render backend
-const API = "https://gameday-parking.onrender.com";
+  // api to render backend, left as "" so it uses the same server that served the page
+const API = "";
 const card = document.getElementById("card");
 const TOKEN_KEY = "gdp-token";
 
@@ -82,7 +82,7 @@ async function onSubmit(e) {
       return;
     }
     localStorage.setItem(TOKEN_KEY, data.token);
-    showWelcome(data.user);
+    window.location.href = '/';
   } catch (err) {
     msg.className = "msg bad"; msg.textContent = "Couldn’t reach the server. Is it running?";
   } finally {

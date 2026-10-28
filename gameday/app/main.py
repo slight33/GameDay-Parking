@@ -91,6 +91,8 @@ class TokenOut(BaseModel):
     token: str; 
     user: UserOut
 
+
+
 # Queries the database to make sure neither the username nor the email already exists. If found, it raises a 409 Conflict HTTP error.
 # Strips whitespace and lowercases the username and email so logins are case-insensitive and clean.
 @app.post("/auth/signup", response_model=TokenOut, status_code=201)
@@ -133,6 +135,8 @@ def me(u: Me):
 # ---------- pages ----------
 #Serves frontend HTML files for the root, login, and registration pages.
 @app.get("/", include_in_schema=False)
+def home():
+    return FileResponse(STATIC / "index.html")
 @app.get("/login", include_in_schema=False)
 def login_page():
     return FileResponse(STATIC / "login.html")
