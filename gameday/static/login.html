@@ -9,7 +9,7 @@ Title: Sets the browser tab title to "Sign in  gamedayParking".
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in · gamedayParking</title>
+<header><a href="/" class="home-link">GamedayParking</a></header>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@600;700&display=swap">
 
 <link rel="stylesheet" href="/static/styles.css">
@@ -18,7 +18,7 @@ Title: Sets the browser tab title to "Sign in  gamedayParking".
 -->
 </head>
 <body>
-<header>gamedayParking</header>
+
 <main>
   <h1>Sign in</h1>
   <div class="bay" id="card"></div>
@@ -35,8 +35,10 @@ Title: Sets the browser tab title to "Sign in  gamedayParking".
  Catch/Finally: Handles network failures and re-enables the submit button.
 -->
 <script>
-  // api to render backend
-const API = "https://gameday-parking.onrender.com";
+  // api to render backend, left as "" so it uses the same server that served the page
+const API = ["localhost", "127.0.0.1"].includes(location.hostname)
+  ? ""
+  : "https://gameday-parking.onrender.com";
 const card = document.getElementById("card");
 const TOKEN_KEY = "gdp-token";
 
@@ -82,7 +84,7 @@ async function onSubmit(e) {
       return;
     }
     localStorage.setItem(TOKEN_KEY, data.token);
-    showWelcome(data.user);
+    window.location.href = '/';
   } catch (err) {
     msg.className = "msg bad"; msg.textContent = "Couldn’t reach the server. Is it running?";
   } finally {
