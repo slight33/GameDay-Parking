@@ -1,10 +1,12 @@
 // Number of empty event cards to show until events come from the backend.
 const CARD_COUNT = 6;
-
+const API = ["localhost", "127.0.0.1"].includes(location.hostname)
+  ? ""
+  : "https://gameday-parking.onrender.com";
 const grid = document.getElementById("event-grid");
 const searchForm = document.getElementById("search-form");
 const searchInput = document.getElementById("search-input");
-const res = await fetch(`${API}/me`, { headers: { Authorization: "Bearer " + token } });
+
 
 function renderEmptyCards(count) {
   for (let i = 0; i < count; i++) {
@@ -28,7 +30,7 @@ async function showUser() {
   if (!token) return; // not logged in, so keep the Log in / Sign up buttons
 
   try {
-    const res = await fetch("/me", { headers: { Authorization: "Bearer " + token } });
+    const res = await fetch(`${API}/me`, { headers: { Authorization: "Bearer " + token } });
     if (!res.ok) {
       localStorage.removeItem(TOKEN_KEY); // expired or invalid token
       return;
