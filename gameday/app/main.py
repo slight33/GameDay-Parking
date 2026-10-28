@@ -9,14 +9,15 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import bcrypt, jwt
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .models import SessionLocal, User, init_db
+from .models import SessionLocal, User, Event, Listing, init_db
 from fastapi.staticfiles import StaticFiles
 # Environment Constants: Sets a secret key for security signatures.
 # CORS Settings: Enables broad Cross-Origin Resource Sharing (*) so external frontend clients can communicate with the backend.
@@ -130,6 +131,53 @@ def login(d: LoginIn, db: DB):
 @app.get("/me", response_model=UserOut)
 def me(u: Me): 
     return u
+
+
+# ---------- events and parking spots (public: no login needed) ----------
+# EventOut: What the API sends for one event. spots is how many parking spots hosts have listed for it.
+class EventOut(BaseModel):
+    id: str; name: str; venue: str; date: str; time: str; lat: float; lng: float
+    spots: int = 0
+
+# ListingOut: What the API sends for one parking spot. dist is in metres and walk in minutes, both measured from the venue.
+class ListingOut(BaseModel):
+    id: str; address: str; price: float; start: str; end: str; overstay: float
+    security: str; stacked: bool; lat: float; lng: float; dist: int; walk: int
+    model_config = {"from_attributes": True}
+
+# EventSpots: One event together with its spots, so the browse page needs only ONE request.
+class EventSpots(BaseModel):
+    event: EventOut
+    listings: list[ListingOut]
+
+# GET /events: upcoming events, soonest first, each with its spot count.
+# cutoff is yesterday (in UTC) so an event happening tonight isn't dropped early because of time zones;
+# the home page hides anything already past in the visitor's own time zone.
+# Cache-Control lets the browser reuse the answer for 30 seconds, which cuts repeat requests to the database.
+@app.get("/events", response_model=list[EventOut])
+def events(db: DB, response: Response):
+    response.headers["Cache-Control"] = "public, max-age=30"
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    # One grouped query counts the spots for every event at once (instead of one query per event).
+    counts = dict(db.query(Listing.event_id, func.count(Listing.id)).group_by(Listing.event_id).all())
+    rows = db.query(Event).filter(Event.date >= cutoff).order_by(Event.date, Event.time).all()
+    return [EventOut(id=e.id, name=e.name, venue=e.venue, date=e.date, time=e.time,
+                     lat=e.lat, lng=e.lng, spots=counts.get(e.id, 0)) for e in rows]
+
+# GET /events/{event_id}/listings: the parking spots for one event, closest to the venue first.
+# Distances and walking times were stored when each listing was created, so this is just a sorted read.
+# Returns 404 if the event id doesn't exist. An event with no spots returns an empty list (the page shows the empty message).
+@app.get("/events/{event_id}/listings", response_model=EventSpots)
+def event_listings(event_id: str, db: DB, response: Response):
+    e = db.get(Event, event_id)
+    if not e:
+        raise HTTPException(404, "Event not found.")
+    response.headers["Cache-Control"] = "public, max-age=15"
+    spots = db.query(Listing).filter(Listing.event_id == e.id).order_by(Listing.dist).all()
+    return EventSpots(
+        event=EventOut(id=e.id, name=e.name, venue=e.venue, date=e.date, time=e.time,
+                       lat=e.lat, lng=e.lng, spots=len(spots)),
+        listings=[ListingOut.model_validate(l) for l in spots])
 
 
 # ---------- pages ----------

@@ -133,3 +133,208 @@ body {
   color: #fff;
   font-weight: 600;
 }
+
+/* ---------- Event cards that link to the browse page ---------- */
+
+/* The card is now a link: white text on the asphalt, with room to breathe. */
+.event-card {
+  display: block;
+  padding: 1rem 1.1rem;
+  color: #fff;
+  text-decoration: none;
+}
+
+.event-card:hover,
+.event-card:focus-visible {
+  background: var(--asphalt);
+  outline: 3px solid var(--paint);
+  outline-offset: 3px;
+}
+
+.event-card h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.3rem;
+}
+
+.event-card p {
+  margin: 0.15rem 0;
+}
+
+.event-when {
+  color: #D8DBD6;
+}
+
+/* "3 spots" label in the card's bottom corner of text */
+.event-spots {
+  margin-top: 0.8rem !important;
+  font-weight: 700;
+  color: var(--paint);
+}
+
+/* A message that spans the whole card grid (no events / couldn't load). */
+.grid-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 1.2rem;
+  background: #fff;
+  border: 2px dashed var(--border);
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+
+/* ---------- Browse page: map on one side, list of parking spots on the other ---------- */
+
+.muted {
+  color: #5B6670;
+}
+
+.status-error {
+  color: #B3261E;
+  font-weight: 600;
+}
+
+/* Two columns on wide screens; stacked on narrow ones. */
+.browse-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .browse-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The map is an SVG drawn by browse.js from coordinates we already have (no map service, no cost). */
+.map {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #F7F8F5;
+  border: 2px solid var(--asphalt);
+  border-radius: 6px;
+}
+
+.map-ring {
+  fill: none;
+  stroke: var(--border);
+  stroke-dasharray: 4 4;
+}
+
+.map-label {
+  font-size: 11px;
+  fill: #5B6670;
+  text-anchor: middle;
+}
+
+.map-venue {
+  fill: var(--asphalt);
+}
+
+.map-venue-label {
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--asphalt);
+  text-anchor: middle;
+}
+
+/* A pin is a yellow circle with the spot's number. The selected pin turns green. */
+.pin {
+  cursor: pointer;
+}
+
+.pin circle {
+  fill: var(--paint);
+  stroke: var(--asphalt);
+  stroke-width: 2;
+}
+
+.pin text {
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--asphalt);
+  text-anchor: middle;
+}
+
+.pin.on circle {
+  fill: var(--turf);
+}
+
+.pin.on text {
+  fill: #fff;
+}
+
+.pin:focus-visible circle {
+  stroke: var(--turf);
+  stroke-width: 4;
+}
+
+/* The list of spots. */
+.spot-list {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.spot {
+  padding: 0.8rem 1rem;
+  background: #fff;
+  border: 2px solid var(--asphalt);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.spot.on {
+  outline: 3px solid var(--paint);
+}
+
+.spot-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.spot-num {
+  display: inline-block;
+  width: 1.5rem;
+  margin-right: 0.4rem;
+  text-align: center;
+  color: #fff;
+  background: var(--asphalt);
+  font-weight: 700;
+}
+
+.spot-price {
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.spot-line {
+  margin: 0.2rem 0;
+}
+
+.flag {
+  display: inline-block;
+  margin: 0.25rem 0.3rem 0 0;
+  padding: 0 0.5rem;
+  border: 1.5px solid var(--asphalt);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Shown when an event has no parking spots yet. */
+.empty-state {
+  padding: 1.5rem;
+  text-align: center;
+  font-weight: 700;
+  background: #fff;
+  border: 2px dashed var(--border);
+  border-radius: 6px;
+}
