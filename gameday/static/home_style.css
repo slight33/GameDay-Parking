@@ -343,3 +343,8 @@ body {
   border: 2px dashed var(--border);
   border-radius: 6px;
 }
+
+.home-link {
+  color: inherit;
+  text-decoration: none;
+}
