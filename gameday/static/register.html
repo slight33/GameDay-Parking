@@ -40,7 +40,9 @@
 </main>
 <script>
 // api to the render backend
-const API = ""
+const API = ["localhost", "127.0.0.1"].includes(location.hostname)
+  ? ""
+  : "https://gameday-parking.onrender.com";
 const f = document.getElementById("f"), msg = document.getElementById("msg");
 const FIELDS = ["name", "username", "email", "phone", "password"];
 

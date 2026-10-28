@@ -36,7 +36,9 @@ Title: Sets the browser tab title to "Sign in  gamedayParking".
 -->
 <script>
   // api to render backend, left as "" so it uses the same server that served the page
-const API = "";
+const API = ["localhost", "127.0.0.1"].includes(location.hostname)
+  ? ""
+  : "https://gameday-parking.onrender.com";
 const card = document.getElementById("card");
 const TOKEN_KEY = "gdp-token";
 

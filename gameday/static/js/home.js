@@ -4,6 +4,7 @@ const CARD_COUNT = 6;
 const grid = document.getElementById("event-grid");
 const searchForm = document.getElementById("search-form");
 const searchInput = document.getElementById("search-input");
+const res = await fetch(`${API}/me`, { headers: { Authorization: "Bearer " + token } });
 
 function renderEmptyCards(count) {
   for (let i = 0; i < count; i++) {
