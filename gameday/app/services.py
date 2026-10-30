@@ -6,7 +6,6 @@ import json
 from urllib.parse import urlencode
 from urllib.request import urlopen
 from urllib.error import URLError
-import 
 
 # returns if an address is vaild or not
 CENSUS_URL = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
