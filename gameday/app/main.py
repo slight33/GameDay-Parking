@@ -180,6 +180,55 @@ def event_listings(event_id: str, db: DB, response: Response):
         listings=[ListingOut.model_validate(l) for l in spots])
 
 
+# ---------- host upgrade ----------
+from .services import geocode, GeocoderUnavailable
+
+# AddressIn: the address fields the form sends. State must be 2 letters, ZIP must be 5 digits.
+class AddressIn(BaseModel):
+    street: str = Field(min_length=1)
+    city: str = Field(min_length=1)
+    state: str = Field(min_length=2, max_length=2)
+    zip_code: str = Field(pattern=r"^\d{5}$")
+
+# AddressCheckOut: whether the address was found, plus the cleaned-up address and coordinates if it was.
+class AddressCheckOut(BaseModel):
+    valid: bool
+    matched_address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+
+# Joins the form fields into the one-line format the Census Geocoder expects.
+def one_line(d: AddressIn) -> str:
+    return f"{d.street.strip()}, {d.city.strip()}, {d.state.strip().upper()} {d.zip_code.strip()}"
+
+# Joins the form fields into one line and asks the Census Geocoder (in services.py) whether it's a real address.
+@app.post("/host/validate-address", response_model=AddressCheckOut)
+def validate_address(d: AddressIn):
+    try:
+        g = geocode(one_line(d))
+    except GeocoderUnavailable:
+        raise HTTPException(502, "Couldn't reach the address checker. Try again in a moment.")
+    if not g:
+        return AddressCheckOut(valid=False)
+    return AddressCheckOut(valid=True, matched_address=g["address"], lat=g["lat"], lng=g["lng"])
+
+# POST /host/upgrade: turns a logged-in guest into a host and saves their address and coordinates.
+# The address is checked again here instead of trusting coordinates sent from the browser.
+@app.post("/host/upgrade", response_model=UserOut)
+def upgrade_to_host(d: AddressIn, u: Me, db: DB):
+    if u.role != "guest":
+        raise HTTPException(409, "This account is already a host.")
+    try:
+        g = geocode(one_line(d))
+    except GeocoderUnavailable:
+        raise HTTPException(502, "Couldn't reach the address checker. Try again in a moment.")
+    if not g:
+        raise HTTPException(422, "That address couldn't be found. Check it and try again.")
+    u.address, u.lat, u.lng, u.role = g["address"], g["lat"], g["lng"], "host"
+    db.commit()
+    return u
+
+
 # ---------- pages ----------
 #Serves frontend HTML files for the root, login, and registration pages.
 @app.get("/", include_in_schema=False)
@@ -192,3 +241,7 @@ def login_page():
 @app.get("/register", include_in_schema=False)
 def register_page():
     return FileResponse(STATIC / "register.html")
+
+@app.get("/host_upgrade", include_in_schema=False)
+def host_upgrade_page():
+    return FileResponse(STATIC / "host.html")
