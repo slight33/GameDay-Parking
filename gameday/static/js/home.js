@@ -97,8 +97,9 @@ async function showUser() {
     }
     const user = await res.json();
     const actions = document.getElementById("account-actions");
-    actions.innerHTML =
+  actions.innerHTML =
   '<span class="user-name"></span>' +
+  (user.role === "guest" ? '<a class="btn btn-accent" href="/host_upgrade">Become a host</a>' : '') +
   '<button type="button" class="btn btn-ghost" id="logout-button">Log out</button>';
 actions.querySelector(".user-name").textContent = user.username;
 document.getElementById("logout-button").addEventListener("click", logout);
