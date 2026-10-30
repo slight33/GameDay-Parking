@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Become a host · gamedayParking</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@600;700&display=swap">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header><a href="/" class="home-link">gamedayParking</a></header>
+<main>
+  <h1>Become a host</h1>
+  <div class="bay">
+    <form id="address-form" novalidate>
+      <label for="street">Street address</label>
+      <input id="street" name="street" autocomplete="street-address">
+      <label for="city">City</label>
+      <input id="city" name="city" autocomplete="address-level2">
+      <label for="state">State</label>
+      <input id="state" name="state" maxlength="2" placeholder="IL" autocomplete="address-level1">
+      <label for="zip_code">ZIP code</label>
+      <input id="zip_code" name="zip_code" maxlength="5" inputmode="numeric" autocomplete="postal-code">
+      <button>Check address</button>
+      <div class="msg" id="msg" role="alert"></div>
+        <div id="confirm-box" hidden>
+            <label><input type="checkbox" id="confirm"> This is my address, and I have a parking spot here.</label>
+            <button type="button" id="continue" disabled>Continue</button>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script>
+// Same server locally, Render everywhere else.
+const API = ["localhost", "127.0.0.1"].includes(location.hostname)
+  ? ""
+  : "https://gameday-parking.onrender.com";
+
+const form = document.getElementById("address-form");
+const msg = document.getElementById("msg");
+const confirmBox = document.getElementById("confirm-box");
+const confirmCheck = document.getElementById("confirm");
+const continueBtn = document.getElementById("continue");
+
+// The address fields as the backend expects them. Used by both buttons.
+function addressBody() {
+  return JSON.stringify({
+    street: form.street.value.trim(),
+    city: form.city.value.trim(),
+    state: form.state.value.trim().toUpperCase(),
+    zip_code: form.zip_code.value.trim()
+  });
+}
+
+// Hides the confirm step and resets it.
+function hideConfirm() {
+  confirmBox.hidden = true;
+  confirmCheck.checked = false;
+  continueBtn.disabled = true;
+}
+
+// Editing the address after it's been found means it has to be checked again.
+form.addEventListener("input", (e) => { if (e.target !== confirmCheck) hideConfirm(); });
+
+// Continue only works once the box is ticked.
+confirmCheck.addEventListener("change", () => { continueBtn.disabled = !confirmCheck.checked; });
+
+continueBtn.addEventListener("click", async () => {
+  continueBtn.disabled = true;
+  msg.className = "msg"; msg.textContent = "";
+  try {
+    const res = await fetch(`${API}/host/upgrade`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("gdp-token")
+      },
+      body: addressBody()
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msg.className = "msg bad";
+      msg.textContent = typeof data.detail === "string" ? data.detail : "Couldn't upgrade your account. Try again.";
+      continueBtn.disabled = false;
+      return;
+    }
+    window.location.href = "/";   // back to the home page as a host
+  } catch (err) {
+    msg.className = "msg bad"; msg.textContent = "Couldn't reach the server. Is it running?";
+    continueBtn.disabled = false;
+  }
+});
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault(); // stops the page from reloading
+  const btn = form.querySelector("button");
+  const fields = [form.street, form.city, form.state, form.zip_code];
+
+  // Clear errors from the last attempt
+  fields.forEach(i => i.classList.remove("err"));
+  msg.className = "msg"; msg.textContent = "";
+  hideConfirm();
+
+  // Highlight any empty fields and stop
+  const empty = fields.filter(i => !i.value.trim());
+  if (empty.length) {
+    empty.forEach(i => i.classList.add("err"));
+    msg.className = "msg bad"; msg.textContent = "Fill in every address field.";
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/host/validate-address`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: addressBody()
+    });
+    const data = await res.json().catch(() => ({}));
+
+    // 422 means the format was wrong, like a 3-letter state or a 4-digit ZIP
+    if (!res.ok) {
+      msg.className = "msg bad";
+      msg.textContent = typeof data.detail === "string"
+        ? data.detail
+        : "Use a two-letter state and a five-digit ZIP code.";
+      return;
+    }
+
+    if (data.valid) {
+      msg.textContent = "Address found: " + data.matched_address;
+      confirmBox.hidden = false;
+    } else {
+      fields.forEach(i => i.classList.add("err"));
+      msg.className = "msg bad";
+      msg.textContent = "That address couldn't be found. Check the street number and name, then try again.";
+    }
+  } catch (err) {
+    msg.className = "msg bad"; msg.textContent = "Couldn't reach the server. Is it running?";
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
