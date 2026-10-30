@@ -55,6 +55,8 @@ class User(Base):
     pw_hash: Mapped[str]
     role: Mapped[str] = mapped_column(default="guest")                      # guest | host
     address: Mapped[str | None] = mapped_column(default=None)
+    lat: Mapped[float | None] = mapped_column(default=None)
+    lng: Mapped[float | None] = mapped_column(default=None)
 
 # What it does: It defines the events table: one row per game or concert.
 # lat and lng are the venue's coordinates; every parking spot is measured from them.
