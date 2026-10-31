@@ -1,3 +1,4 @@
+<!--Ai Generated-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,7 +10,7 @@
 </head>
 <body>
 <header><a href="/" class="home-link">gamedayParking</a></header>
-<main>
+<main hidden>
   <h1>Become a host</h1>
   <div class="bay">
     <form id="address-form" novalidate>
@@ -36,7 +37,26 @@
 const API = ["localhost", "127.0.0.1"].includes(location.hostname)
   ? ""
   : "https://gameday-parking.onrender.com";
+const TOKEN_KEY = "gdp-token";
 
+// Only logged-in users can see this page. Everyone else is sent back to the home page.
+async function requireLogin() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return location.replace("/");
+
+  try {
+    const res = await fetch(`${API}/me`, { headers: { Authorization: "Bearer " + token } });
+    if (!res.ok) {
+      localStorage.removeItem(TOKEN_KEY);   // expired or invalid token
+      return location.replace("/");
+    }
+    document.querySelector("main").hidden = false;   // logged in, so show the form
+  } catch (err) {
+    location.replace("/");
+  }
+}
+
+requireLogin();
 const form = document.getElementById("address-form");
 const msg = document.getElementById("msg");
 const confirmBox = document.getElementById("confirm-box");
