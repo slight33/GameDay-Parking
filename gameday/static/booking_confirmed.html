@@ -1,0 +1,67 @@
+<!--Ai Generated-->
+<!--Confirmation screen (task bui, success case): shown after a booking is paid and saved.
+    The booking id is in the address, e.g. booking_confirmed.html?id=b1a2b3c4. The page asks the backend for that booking.-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Booking confirmed · GameDay Parking</title>
+  <link rel="stylesheet" href="/static/home_style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="btn btn-ghost" href="/">&larr; All events</a>
+      <span class="brand">GameDay Parking</span>
+    </div>
+  </header>
+
+  <main class="page">
+    <h1 class="page-title">You’re booked!</h1>
+    <p class="muted" id="note">Loading your booking…</p>
+    <ul class="summary" id="details" hidden></ul>
+    <a class="btn btn-primary" href="/">Browse more events</a>
+  </main>
+
+  <script>
+    // Same server locally, Render everywhere else.
+    const API = ["localhost", "127.0.0.1"].includes(location.hostname)
+      ? ""
+      : "https://gameday-parking.onrender.com";
+    const TOKEN_KEY = "gdp-token";
+    const id = new URLSearchParams(location.search).get("id");
+    const note = document.getElementById("note");
+
+    (async () => {
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (!token) return location.replace("/login");          // bookings are private, so sign in first
+      try {
+        const res = await fetch(`${API}/bookings/${encodeURIComponent(id)}`, { headers: { Authorization: "Bearer " + token } });
+        const b = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof b.detail === "string" ? b.detail : "Couldn’t load your booking.");
+
+        // One line per detail. textContent is used so text from the database can never run as code.
+        const rows = [
+          ["Event", `${b.event} at ${b.venue}`], ["Date", b.date], ["Parking spot", b.address],
+          ["Hours", `${b.start} – ${b.end}`], ["Licence plate", b.plate],
+          ["Paid", "$" + b.amount.toFixed(2)], ["Booking number", b.id],
+        ];
+        const list = document.getElementById("details");
+        rows.forEach(([label, value]) => {
+          const li = document.createElement("li");
+          const strong = document.createElement("strong");
+          strong.textContent = label + ": ";
+          li.append(strong, value);
+          list.append(li);
+        });
+        list.hidden = false;
+        note.textContent = "Your payment went through. Keep this booking number.";
+      } catch (err) {
+        note.textContent = err.message;
+        note.className = "status-error";
+      }
+    })();
+  </script>
+</body>
+</html>

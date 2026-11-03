@@ -133,7 +133,10 @@ function render(ev, listings) {
       el("div", {},
         l.stacked ? el("span", { className: "flag", textContent: "Stacked parking" }) : "",
         l.overstay > 0 ? el("span", { className: "flag", textContent: money(l.overstay) + " overstay fee / 15 min" }) : ""),
-      l.security ? el("p", { className: "spot-line", textContent: "Security: " + l.security }) : "");
+      l.security ? el("p", { className: "spot-line", textContent: "Security: " + l.security }) : "",
+      // "Book this spot" opens the booking page and puts the spot's id in the address (booking.html?listing=l1a2b3c4),
+      // the same way the home page cards pass the event id to this page.
+      el("a", { className: "btn btn-accent book-btn", href: `/static/booking.html?listing=${encodeURIComponent(l.id)}`, textContent: "Book this spot" }));
     card.addEventListener("click", () => highlight(i));
     cards.push(card);
     return card;

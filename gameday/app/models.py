@@ -92,6 +92,27 @@ class Listing(Base):
     dist: Mapped[int]   # metres from the venue
     walk: Mapped[int]   # walking minutes from the venue
 
+# What it does: It defines the bookings table: one row per PAID reservation of a parking spot.
+# A row is only created AFTER Stripe has taken the payment, so every row in this table has been paid for.
+# listing_id and guest_id are foreign keys, so they must match a real parking spot and a real user.
+# start and end are the booked hours as "HH:MM" on the event's date (the same text format the listings use).
+# amount is stored in CENTS (1500 means $15.00) because Stripe works in whole cents and decimals can drift (0.1 + 0.2 is not exactly 0.3).
+# payment_intent_id is Stripe's id for the payment. It is unique, so one payment can never create two bookings.
+# request_id is a random code the browser makes for each checkout attempt. It is unique too: if the same attempt arrives twice
+# (a double click, or a retry after a bad connection) the second one is recognised, so nobody is charged or booked twice.
+class Booking(Base):
+    __tablename__ = "bookings"
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: new_id("b"))
+    listing_id: Mapped[str] = mapped_column(ForeignKey("listings.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    plate: Mapped[str]                                  # the guest's licence plate, e.g. "ABC123"
+    start: Mapped[str]                                  # booked from, HH:MM
+    end: Mapped[str]                                    # booked until, HH:MM
+    amount: Mapped[int]                                 # price paid, in cents
+    payment_intent_id: Mapped[str] = mapped_column(String, unique=True)
+    request_id: Mapped[str] = mapped_column(String, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
 # The events that are added the first time the app starts on an empty events table.
 SEED_EVENTS = [
     dict(id="v1", name="Bears vs Packers", venue="Soldier Field", date="2026-11-15", time="12:00", lat=41.8623, lng=-87.6167),

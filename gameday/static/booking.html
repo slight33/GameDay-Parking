@@ -1,0 +1,58 @@
+<!--Ai Generated-->
+<!--Booking page (task bpage): the guest sees the spot they picked, confirms their hours, enters their licence plate and pays.
+    booking.js fills in the details and starts Stripe's secure card form. Opened from the browse page as booking.html?listing=ID-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book a spot · GameDay Parking</title>
+  <link rel="stylesheet" href="/static/home_style.css">
+</head>
+<body>
+  <!-- Same header as the other pages. -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="btn btn-ghost" href="/">&larr; All events</a>
+      <span class="brand">GameDay Parking</span>
+    </div>
+  </header>
+
+  <main class="page">
+    <h1 class="page-title">Book your spot</h1>
+    <!-- Messages for problems loading the page (spot not found, payments not set up). -->
+    <p class="muted" id="page-note">Loading…</p>
+
+    <!-- The details of the chosen spot. booking.js fills these in. -->
+    <div id="summary" hidden>
+      <h2 id="s-event"></h2>
+      <p class="muted" id="s-venue"></p>
+      <p><strong id="s-address"></strong></p>
+      <p class="muted" id="s-walk"></p>
+      <p><span class="spot-price" id="s-price"></span> <span class="muted">for your chosen hours</span></p>
+    </div>
+
+    <!-- The booking form. It stays hidden until the spot and Stripe have loaded. -->
+    <form id="booking-form" class="booking-form" hidden novalidate>
+      <label for="start">Arrive</label>
+      <input id="start" name="start" type="time" required>
+      <label for="end">Leave</label>
+      <input id="end" name="end" type="time" required>
+      <label for="plate">Licence plate</label>
+      <input id="plate" name="plate" maxlength="12" autocomplete="off" placeholder="ABC123">
+
+      <!-- Stripe puts the secure card fields here. The card number goes straight to Stripe and never reaches our server. -->
+      <label for="card-element">Card</label>
+      <div id="card-element" class="card-box"></div>
+
+      <button type="submit" class="btn btn-primary" id="pay-btn">Pay and book</button>
+      <p class="form-msg" id="form-msg" role="alert"></p>
+      <p class="muted">Test mode: use card 4242 4242 4242 4242, any future date, any CVC. Card 4000 0000 0000 0002 is always declined.</p>
+    </form>
+  </main>
+
+  <!-- Stripe's own script. It must be loaded from Stripe (not copied) so card details stay secure. -->
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="/static/js/booking.js"></script>
+</body>
+</html>
