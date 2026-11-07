@@ -2,7 +2,14 @@
 import bcrypt
 from app.models import init_db, SessionLocal, User, Listing, Event
 from app.services import place
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
+CHICAGO = ZoneInfo("America/Chicago")
+
+# Combines an event's date ("2026-11-15") with a time ("09:00") into a full Chicago date-time.
+def at(date_str: str, hhmm: str) -> datetime:
+    return datetime.fromisoformat(f"{date_str} {hhmm}").replace(tzinfo=CHICAGO)
 init_db()
 with SessionLocal() as s:
     # Only run once: if any listings exist, leave the database alone.
@@ -27,7 +34,7 @@ with SessionLocal() as s:
         p = place(addr, e.lat, e.lng)   # real geocode, then distance and walking time from the venue
         if not p:
             raise SystemExit(f"Couldn't find {addr}, so nothing was added.")
-        s.add(Listing(host_id=host.id, event_id=ev, address=addr, price=price, start=st, end=en,
+        s.add(Listing(host_id=host.id, event_id=ev, address=addr, price=price, start_at=at(e.date, st), end_at=at(e.date, en),
                       overstay=ov, security=sec, stacked=stk, **p))
     s.commit()
     print("Added sample listings.")

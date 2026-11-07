@@ -19,6 +19,13 @@ from sqlalchemy.orm import Session
 
 from .models import SessionLocal, User, Event, Listing, Booking, init_db
 from fastapi.staticfiles import StaticFiles
+from zoneinfo import ZoneInfo
+
+CHICAGO = ZoneInfo("America/Chicago")
+
+# Combines an event's date ("2026-11-15") with a time ("09:00") into a full Chicago date-time.
+def at(date_str: str, hhmm: str) -> datetime:
+    return datetime.fromisoformat(f"{date_str} {hhmm}").replace(tzinfo=CHICAGO)
 # Environment Constants: Sets a secret key for security signatures.
 # CORS Settings: Enables broad Cross-Origin Resource Sharing (*) so external frontend clients can communicate with the backend.
 # Auth Protocol: Instantiates HTTPBearer to intercept incoming Authorization: Bearer <token> request headers.
@@ -141,7 +148,7 @@ class EventOut(BaseModel):
 
 # ListingOut: What the API sends for one parking spot. dist is in metres and walk in minutes, both measured from the venue.
 class ListingOut(BaseModel):
-    id: str; address: str; price: float; start: str; end: str; overstay: float
+    id: str; address: str; price: float; start_at: datetime; end_at: datetime; overstay: float
     security: str; stacked: bool; lat: float; lng: float; dist: int; walk: int
     model_config = {"from_attributes": True}
 
@@ -282,7 +289,9 @@ def booking_out(b: Booking, db: Session) -> BookingOut:
     l = db.get(Listing, b.listing_id)
     e = db.get(Event, l.event_id)
     return BookingOut(id=b.id, event=e.name, venue=e.venue, address=l.address, date=e.date,
-                      start=b.start, end=b.end, plate=b.plate, amount=b.amount / 100)
+                      start=b.start_at.astimezone(CHICAGO).strftime("%H:%M"),
+                      end=b.end_at.astimezone(CHICAGO).strftime("%H:%M"),
+                      plate=b.plate, amount=b.amount / 100)
 
 # POST /bookings: book and pay for a spot. The guest must be signed in (u: Me).
 @app.post("/bookings", response_model=BookingOut, status_code=201)
@@ -296,8 +305,18 @@ def create_booking(d: BookingIn, u: Me, db: DB):
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")   # same cushion as GET /events
     if e.date < yesterday:
         raise HTTPException(422, "This event has already happened.")
-    if not (l.start <= d.start < d.end <= l.end):    # inside the host's hours, and the start is before the end
-        raise HTTPException(422, f"Choose a time between {l.start} and {l.end}, with the start before the end.")
+
+    # The form sends "HH:MM" times. Combine them with the event's date to get full date-times.
+    start_at = at(e.date, d.start)
+    end_at = at(e.date, d.end)
+    if end_at <= start_at:
+        end_at += timedelta(days=1)   # the booking runs past midnight
+    # The booking has to fit inside the host's available window.
+    if start_at < l.start_at or end_at > l.end_at:
+        opens = l.start_at.astimezone(CHICAGO).strftime("%H:%M")
+        closes = l.end_at.astimezone(CHICAGO).strftime("%H:%M")
+        raise HTTPException(422, f"Choose a time between {opens} and {closes}.")
+
     plate = re.sub(r"[^A-Z0-9 -]", "", d.plate.upper()).strip()   # keep letters, numbers, spaces and dashes only
     if not plate:
         raise HTTPException(422, "Enter your licence plate.")
@@ -312,7 +331,7 @@ def create_booking(d: BookingIn, u: Me, db: DB):
             return booking_out(done, db)
 
         # bchk: is the spot free for the whole window? We ask BEFORE charging anyone.
-        if not is_available(db, l.id, d.start, d.end):
+        if not is_available(db, l.id, start_at, end_at):
             raise HTTPException(409, "Sorry, that spot is already booked for part of that time. Pick another time or spot. You have not been charged.")
 
         # bpay: charge the card. If it fails we stop here and the database is never touched.
@@ -328,7 +347,7 @@ def create_booking(d: BookingIn, u: Me, db: DB):
         # bsave: the money is taken, so save the booking. Once saved, the spot counts as taken for those hours
         # because is_available() looks at this table.
         try:
-            b = Booking(listing_id=l.id, guest_id=u.id, plate=plate, start=d.start, end=d.end,
+            b = Booking(listing_id=l.id, guest_id=u.id, plate=plate, start_at=start_at, end_at=end_at,
                         amount=amount, payment_intent_id=payment_id, request_id=d.request_id)
             db.add(b)
             db.commit()

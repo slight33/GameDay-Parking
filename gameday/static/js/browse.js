@@ -8,6 +8,8 @@ const API = ["localhost", "127.0.0.1"].includes(location.hostname)
   : "https://gameday-parking.onrender.com";
 const eventId = new URLSearchParams(location.search).get("event");
 const results = document.getElementById("results");
+// "2026-11-15T15:00:00+00:00" -> "9:00 AM" in the visitor's own time zone.
+const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const NS = "http://www.w3.org/2000/svg";   // SVG shapes (the map) must be created in this namespace
 
 // Small helpers --------------------------------------------------------------------------
@@ -126,10 +128,11 @@ function render(ev, listings) {
   const list = el("ul", { className: "spot-list" }, listings.map((l, i) => {
     const card = el("li", { className: "spot" },
       el("div", { className: "spot-top" },
-        el("strong", {}, el("span", { className: "spot-num", textContent: String(i + 1) }), l.address),
-        el("span", { className: "spot-price", textContent: money(l.price) })),
+      el("strong", {}, el("span", { className: "spot-num", textContent: String(i + 1) }), l.address),
+      el("span", { className: "spot-price", textContent: money(l.price) })),
       el("p", { className: "spot-line muted", textContent: `${miles(l.dist)} from the venue · ${l.walk} min walk` }),
-      el("p", { className: "spot-line muted", textContent: `Available ${l.start}–${l.end}` }),
+      el("p", { className: "spot-line muted", textContent: `Available ${clock(l.start_at)}–${clock(l.end_at)}` }),
+      el("p", { className: "spot-line muted", textContent: `Available ${l.start_at}–${l.end_at}` }),
       el("div", {},
         l.stacked ? el("span", { className: "flag", textContent: "Stacked parking" }) : "",
         l.overstay > 0 ? el("span", { className: "flag", textContent: money(l.overstay) + " overstay fee / 15 min" }) : ""),
