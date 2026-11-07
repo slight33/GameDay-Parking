@@ -414,7 +414,9 @@ async def stripe_webhook(request: Request):
 
 
 # ---------- create listing (hosts only) ----------
-HOST_RADIUS_M = 8047   # hosts can only list for events within 5 miles of their saved address
+# hosts can only list for events within 5 miles of their saved address
+HOST_RADIUS_M = 8047  
+ 
 
 # ListingIn: what the create listing form sends. Times are "HH:MM" in the venue's own time zone.
 class ListingIn(BaseModel):
