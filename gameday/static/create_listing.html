@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create a listing · gamedayParking</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@600;700&display=swap">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header><a href="/" class="home-link">gamedayParking</a></header>
+<main hidden>
+  <h1>Create a listing</h1>
+  <div class="bay">
+    <p class="mute" id="note">Loading events near you…</p>
+    <form id="listing-form" novalidate hidden>
+      <label for="event">Event</label>
+      <select id="event" name="event"></select>
+      <label for="price">Price ($)</label>
+      <input id="price" name="price" type="number" min="1" step="0.01" inputmode="decimal">
+      <label for="start">Available from</label>
+      <input id="start" name="start" type="time">
+      <label for="end">Latest pickup</label>
+      <input id="end" name="end" type="time">
+      <label for="overstay">Overstay fee per 15 minutes ($)</label>
+      <input id="overstay" name="overstay" type="number" min="0" step="0.01" value="0" inputmode="decimal">
+      <label for="security">Security details <span class="mute">(optional)</span></label>
+      <input id="security" name="security" maxlength="200" placeholder="e.g. Gated driveway, camera on garage">
+      <label><input type="checkbox" id="stacked"> Cars may be parked behind each other (stacked parking)</label>
+      <button>Create listing</button>
+      <div class="msg" id="msg" role="alert"></div>
+    </form>
+  </div>
+</main>
+
+<script>
+// Same server locally, Render everywhere else.
+const API = ["localhost", "127.0.0.1"].includes(location.hostname)
+  ? ""
+  : "https://gameday-parking.onrender.com";
+const TOKEN_KEY = "gdp-token";
+const token = localStorage.getItem(TOKEN_KEY);
+const auth = { Authorization: "Bearer " + token };
+
+const form = document.getElementById("listing-form");
+const note = document.getElementById("note");
+const msg = document.getElementById("msg");
+let events = [];   // the events loaded into the dropdown
+
+// Moves an "HH:MM" time by some hours, wrapping around midnight. Used to prefill the times.
+function shift(hhmm, hours) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const total = ((h * 60 + m + hours * 60) % 1440 + 1440) % 1440;
+  return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0");
+}
+
+// "2026-11-15" -> "Sun, Nov 15"
+function shortDate(date) {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+}
+
+// Prefills the times from the chosen event: open 3 hours before the start, latest pickup 4 hours after.
+// The host can change both.
+function prefillTimes() {
+  const ev = events.find(e => e.id === form.event.value);
+  if (!ev) return;
+  form.start.value = shift(ev.time, -3);
+  form.end.value = shift(ev.time, 4);
+}
+
+// Only hosts can use this page. Everyone else is sent back to the home page.
+async function load() {
+  if (!token) return location.replace("/");
+  try {
+    const me = await fetch(`${API}/me`, { headers: auth });
+    if (!me.ok) { localStorage.removeItem(TOKEN_KEY); return location.replace("/"); }
+    if ((await me.json()).role !== "host") return location.replace("/");
+    document.querySelector("main").hidden = false;
+
+    // Load upcoming events near the host's address into the dropdown.
+    const res = await fetch(`${API}/host/events`, { headers: auth });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { note.textContent = typeof data.detail === "string" ? data.detail : "Couldn't load events."; return; }
+    events = data;
+    if (!events.length) { note.textContent = "There are no upcoming events near your address yet."; return; }
+
+    for (const ev of events) {
+      const opt = document.createElement("option");
+      opt.value = ev.id;
+      opt.textContent = `${ev.name} · ${ev.venue} · ${shortDate(ev.date)}`;
+      form.event.append(opt);
+    }
+    form.event.addEventListener("change", prefillTimes);
+    prefillTimes();
+    note.hidden = true;
+    form.hidden = false;
+  } catch (err) {
+    note.textContent = "Couldn't reach the server. Is it running?";
+  }
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();   // stops the page from reloading
+  const btn = form.querySelector("button");
+  form.querySelectorAll("input").forEach(i => i.classList.remove("err"));
+  msg.className = "msg"; msg.textContent = "";
+
+  // Highlight any empty required fields and stop.
+  const empty = [form.price, form.start, form.end].filter(i => !i.value);
+  if (empty.length) {
+    empty.forEach(i => i.classList.add("err"));
+    msg.className = "msg bad"; msg.textContent = "Fill in the price and both times.";
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/listings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...auth },
+      body: JSON.stringify({
+        event_id: form.event.value,
+        price: Number(form.price.value),
+        start: form.start.value,
+        end: form.end.value,
+        overstay: Number(form.overstay.value || 0),
+        security: form.security.value.trim(),
+        stacked: form.stacked.checked
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msg.className = "msg bad";
+      msg.textContent = typeof data.detail === "string"
+        ? data.detail
+        : "Check the price and fees: the price must be more than $0, and fees can't be negative.";
+      return;
+    }
+    // Success: show the new listing on its event's page.
+    window.location.href = `/static/browse.html?event=${encodeURIComponent(form.event.value)}`;
+  } catch (err) {
+    msg.className = "msg bad"; msg.textContent = "Couldn't reach the server. Is it running?";
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+load();
+</script>
+</body>
+</html>

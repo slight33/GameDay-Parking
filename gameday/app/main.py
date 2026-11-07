@@ -22,12 +22,13 @@ from fastapi.staticfiles import StaticFiles
 from zoneinfo import ZoneInfo
 from .ticketmaster import maybe_sync
 from .venues import VENUES
+from .services import haversine_m
 
 CHICAGO = ZoneInfo("America/Chicago")
 
 # Combines an event's date ("2026-11-15") with a time ("09:00") into a full Chicago date-time.
-def at(date_str: str, hhmm: str) -> datetime:
-    return datetime.fromisoformat(f"{date_str} {hhmm}").replace(tzinfo=CHICAGO)
+def at(date_str: str, hhmm: str, tz: ZoneInfo = CHICAGO) -> datetime:
+    return datetime.fromisoformat(f"{date_str} {hhmm}").replace(tzinfo=tz)
 # Environment Constants: Sets a secret key for security signatures.
 # CORS Settings: Enables broad Cross-Origin Resource Sharing (*) so external frontend clients can communicate with the backend.
 # Auth Protocol: Instantiates HTTPBearer to intercept incoming Authorization: Bearer <token> request headers.
@@ -410,6 +411,76 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
+
+
+# ---------- create listing (hosts only) ----------
+HOST_RADIUS_M = 8047   # hosts can only list for events within 5 miles of their saved address
+
+# ListingIn: what the create listing form sends. Times are "HH:MM" in the venue's own time zone.
+class ListingIn(BaseModel):
+    event_id: str
+    price: float = Field(gt=0, le=500)
+    start: str = Field(pattern=HHMM)          # when the spot opens
+    end: str = Field(pattern=HHMM)            # latest pickup time
+    overstay: float = Field(default=0, ge=0, le=100)
+    security: str = Field(default="", max_length=200)
+    stacked: bool = False
+
+# Stops anyone who isn't a host with a saved address.
+def require_host(u: User) -> None:
+    if u.role != "host":
+        raise HTTPException(403, "Only hosts can create listings.")
+    if u.lat is None or not u.address:
+        raise HTTPException(409, "Add your address before creating a listing.")
+
+# GET /host/events: upcoming events at venues near the host's address, for the form's event list.
+@app.get("/host/events", response_model=list[EventOut])
+def host_events(u: Me, db: DB):
+    require_host(u)
+    cutoff = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    venue_ids = [v["tm_id"] for v in VENUES]
+    rows = (db.query(Event)
+            .filter(Event.date >= cutoff, Event.venue_id.in_(venue_ids), Event.status.notin_(HIDDEN_STATUSES))
+            .order_by(Event.date, Event.time).all())
+    near = [e for e in rows if haversine_m(u.lat, u.lng, e.lat, e.lng) <= HOST_RADIUS_M]
+    return [EventOut(id=e.id, name=e.name, venue=e.venue, date=e.date, time=e.time,
+                     lat=e.lat, lng=e.lng) for e in near]
+
+# POST /listings: creates a listing at the host's saved address for one event.
+# The host's coordinates were saved during the upgrade, so no geocoding is needed here.
+@app.post("/listings", response_model=ListingOut, status_code=201)
+def create_listing(d: ListingIn, u: Me, db: DB):
+    require_host(u)
+
+    e = db.get(Event, d.event_id)
+    if not e or e.venue_id not in [v["tm_id"] for v in VENUES] or e.status in HIDDEN_STATUSES:
+        raise HTTPException(404, "That event isn't available.")
+    tz = ZoneInfo(e.timezone)
+    if e.date < datetime.now(tz).strftime("%Y-%m-%d"):
+        raise HTTPException(422, "This event has already happened.")
+
+    dist = round(haversine_m(e.lat, e.lng, u.lat, u.lng))
+    if dist > HOST_RADIUS_M:
+        raise HTTPException(422, "Your address is too far from this venue.")
+
+    if db.query(Listing).filter(Listing.host_id == u.id, Listing.event_id == e.id, Listing.active).first():
+        raise HTTPException(409, "You already have a listing for this event.")
+
+    # Turn the "HH:MM" times into full date-times in the venue's time zone.
+    start_at = at(e.date, d.start, tz)
+    end_at = at(e.date, d.end, tz)
+    if end_at <= start_at:
+        end_at += timedelta(days=1)   # the window runs past midnight
+    if end_at - start_at > timedelta(hours=16):
+        raise HTTPException(422, "The available window can be at most 16 hours.")
+
+    l = Listing(host_id=u.id, event_id=e.id, address=u.address, price=round(d.price, 2),
+                start_at=start_at, end_at=end_at, overstay=d.overstay, security=d.security.strip(),
+                stacked=d.stacked, lat=u.lat, lng=u.lng, dist=dist, walk=max(1, round(dist / 80)))
+    db.add(l)
+    db.commit()
+    return l
+
 # ---------- pages ----------
 #Serves frontend HTML files for the root, login, and registration pages.
 @app.get("/", include_in_schema=False)
@@ -426,3 +497,7 @@ def register_page():
 @app.get("/host_upgrade", include_in_schema=False)
 def host_upgrade_page():
     return FileResponse(STATIC / "host.html")
+
+@app.get("/create_listing", include_in_schema=False)
+def create_listing_page():
+    return FileResponse(STATIC / "create_listing.html")
