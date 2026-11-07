@@ -20,6 +20,8 @@ from sqlalchemy.orm import Session
 from .models import SessionLocal, User, Event, Listing, Booking, init_db
 from fastapi.staticfiles import StaticFiles
 from zoneinfo import ZoneInfo
+from .ticketmaster import maybe_sync
+from .venues import VENUES
 
 CHICAGO = ZoneInfo("America/Chicago")
 
@@ -32,6 +34,7 @@ def at(date_str: str, hhmm: str) -> datetime:
 
 SECRET = os.environ.get("JWT_SECRET", "dev-only-change-me")
 STATIC = Path(__file__).resolve().parent.parent / "static"
+HIDDEN_STATUSES = ["canceled", "cancelled", "postponed"]   # events with these statuses don't show on the site
 
 app = FastAPI(title="gamedayParking")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])  # tighten in prod
@@ -163,14 +166,18 @@ class EventSpots(BaseModel):
 # Cache-Control lets the browser reuse the answer for 30 seconds, which cuts repeat requests to the database.
 @app.get("/events", response_model=list[EventOut])
 def events(db: DB, response: Response):
+    maybe_sync(db)   # refreshes from Ticketmaster if the last sync is over 12 hours old
     response.headers["Cache-Control"] = "public, max-age=30"
     cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-    # One grouped query counts the spots for every event at once (instead of one query per event).
     counts = dict(db.query(Listing.event_id, func.count(Listing.id)).group_by(Listing.event_id).all())
-    rows = db.query(Event).filter(Event.date >= cutoff).order_by(Event.date, Event.time).all()
+    venue_ids = [v["tm_id"] for v in VENUES]
+    rows = (db.query(Event)
+            .filter(Event.date >= cutoff,
+                    Event.venue_id.in_(venue_ids),
+                    Event.status.notin_(HIDDEN_STATUSES))
+            .order_by(Event.date, Event.time).all())
     return [EventOut(id=e.id, name=e.name, venue=e.venue, date=e.date, time=e.time,
                      lat=e.lat, lng=e.lng, spots=counts.get(e.id, 0)) for e in rows]
-
 # GET /events/{event_id}/listings: the parking spots for one event, closest to the venue first.
 # Distances and walking times were stored when each listing was created, so this is just a sorted read.
 # Returns 404 if the event id doesn't exist. An event with no spots returns an empty list (the page shows the empty message).

@@ -70,6 +70,9 @@ class Event(Base):
     time: Mapped[str]   # HH:MM
     lat: Mapped[float]
     lng: Mapped[float]
+    venue_id: Mapped[str | None] = mapped_column(default=None, index=True)   # Ticketmaster venue id, matches app/venues.py
+    status: Mapped[str] = mapped_column(default="onsale")                     # onsale, offsale, canceled, postponed, rescheduled
+    timezone: Mapped[str] = mapped_column(default="America/Chicago")         # the venue's time zone, e.g. "America/New_York"
 
 # What it does: It defines the listings table: one row per parking spot a host offers for one event.
 # host_id and event_id are foreign keys, so they must match a real row in users / events.
