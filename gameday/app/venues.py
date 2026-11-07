@@ -3,7 +3,9 @@ import json, os
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+# ticketmaster API key
 KEY = os.environ["TICKETMASTER_API_KEY"]
+# 
 NAMES = ["Lambeau Field", "Highmark Stadium", "Raymond James Stadium", "Hard Rock Stadium", "Empower Field at Mile High"]
 VENUES = [
     {"tm_id": "KovZpa3awe", "name": "Lambeau Field"},
