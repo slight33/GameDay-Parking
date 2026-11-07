@@ -82,8 +82,9 @@ class Listing(Base):
     event_id: Mapped[str] = mapped_column(ForeignKey("events.id"), index=True)
     address: Mapped[str]
     price: Mapped[float]
-    start: Mapped[str]                                  # first time the spot is available, HH:MM
-    end: Mapped[str]                                    # last time the spot is available, HH:MM
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))   # booked from
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))     # booked until
+    active: Mapped[bool] = mapped_column(default=True)
     overstay: Mapped[float] = mapped_column(default=0)  # fee per 15 minutes late
     security: Mapped[str] = mapped_column(default="")   # e.g. "Gated driveway"
     stacked: Mapped[bool] = mapped_column(default=False)  # True if cars may be parked behind each other
@@ -106,8 +107,9 @@ class Booking(Base):
     listing_id: Mapped[str] = mapped_column(ForeignKey("listings.id"), index=True)
     guest_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     plate: Mapped[str]                                  # the guest's licence plate, e.g. "ABC123"
-    start: Mapped[str]                                  # booked from, HH:MM
-    end: Mapped[str]                                    # booked until, HH:MM
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))   # booked from
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))     # booked until
+    status: Mapped[str] = mapped_column(default="confirmed")
     amount: Mapped[int]                                 # price paid, in cents
     payment_intent_id: Mapped[str] = mapped_column(String, unique=True)
     request_id: Mapped[str] = mapped_column(String, unique=True)
