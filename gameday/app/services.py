@@ -10,6 +10,7 @@ import os
 import threading
 import stripe
 from .models import Booking
+from datetime import datetime
 
 # returns if an address is vaild or not
 CENSUS_URL = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
@@ -81,9 +82,14 @@ def lock_for(listing_id: str) -> threading.Lock:
 # Two time windows overlap when each one starts before the other one ends.
 # Example: an existing booking 10:00-12:00 clashes with a request for 11:00-13:00, but NOT with 12:00-14:00 (back to back is fine).
 # "HH:MM" text compares correctly as plain text ("09:30" < "10:00"), so no date maths is needed.
-def is_available(db, listing_id: str, start: str, end: str) -> bool:
+def is_available(db, listing_id: str, start_at: datetime, end_at: datetime) -> bool:
+    # A clash is any confirmed booking on this spot that overlaps the requested window.
+    # Canceled or refunded bookings don't count, so they don't block the spot.
     clash = db.query(Booking).filter(
-        Booking.listing_id == listing_id, Booking.start < end, Booking.end > start).first()
+        Booking.listing_id == listing_id,
+        Booking.status == "confirmed",
+        Booking.start_at < end_at,
+        Booking.end_at > start_at).first()
     return clash is None
 
 # Task bpay: charge the card through Stripe and return Stripe's payment id.

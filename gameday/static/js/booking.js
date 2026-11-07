@@ -15,6 +15,9 @@ const form = document.getElementById("booking-form");
 const formMsg = document.getElementById("form-msg");
 const payBtn = document.getElementById("pay-btn");
 const money = (n) => "$" + Number(n).toFixed(2).replace(/\.00$/, "");
+// "2026-11-15T15:00:00+00:00" -> "09:00" in Chicago time, the format the time boxes need.
+const hhmm = (iso) => new Date(iso).toLocaleTimeString("en-GB",
+  { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "America/Chicago" });
 
 let stripe, card;   // Stripe's tools, created once the page has loaded
 
@@ -52,15 +55,16 @@ async function load() {
     document.getElementById("s-event").textContent = ev.name;
     document.getElementById("s-venue").textContent = ev.venue;
     document.getElementById("s-address").textContent = l.address;
-    document.getElementById("s-walk").textContent = `${l.walk} min walk from the venue · Available ${l.start}–${l.end}`;
+    const open = hhmm(l.start_at), close = hhmm(l.end_at);
+    document.getElementById("s-walk").textContent = `${l.walk} min walk from the venue · Available ${open}–${close}`;
     document.getElementById("s-price").textContent = money(l.price);
 
     // The time boxes start on the host's full window and can't go outside it.
-    for (const [id, value] of [["start", l.start], ["end", l.end]]) {
+    for (const [id, value] of [["start", open], ["end", close]]) {
       const box = document.getElementById(id);
-      box.min = l.start; box.max = l.end; box.value = value;
+      box.min = open; box.max = close; box.value = value;
     }
-    form.dataset.open = l.start; form.dataset.close = l.end;
+    form.dataset.open = open; form.dataset.close = close;
 
     // Start Stripe's secure card form inside the #card-element box.
     stripe = Stripe(cfg.publishable_key);
