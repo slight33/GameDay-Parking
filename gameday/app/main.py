@@ -503,3 +503,7 @@ def host_upgrade_page():
 @app.get("/create_listing", include_in_schema=False)
 def create_listing_page():
     return FileResponse(STATIC / "create_listing.html")
+
+@app.get("/my_bookings", include_in_schema=False)
+def my_bookings_page():
+    return FileResponse(STATIC / "my_bookings.html")
