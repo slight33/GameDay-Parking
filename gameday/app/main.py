@@ -250,8 +250,7 @@ def upgrade_to_host(d: AddressIn, u: Me, db: DB):
 import os
 from fastapi import Request
 from starlette.concurrency import run_in_threadpool
-from .services import lock_for, is_available, charge, refund, PaymentDeclined, PaymentUnavailable
-
+from .services import lock_for, is_available, charge, refund, refund_booking, PaymentDeclined, PaymentUnavailable   # >>> CANCEL FEATURE (changed: added refund_booking)
 # Stripe's "webhook secret" proves a webhook message really came from Stripe. Set it as an environment variable.
 WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
@@ -291,16 +290,40 @@ class BookingIn(BaseModel):
 class BookingOut(BaseModel):
     id: str; event: str; venue: str; address: str; date: str
     start: str; end: str; plate: str; amount: float
+ # >>> CANCEL FEATURE (new): two extra fields so the My bookings page knows what to show
+    cancelled: bool = False     # True once the booking has been cancelled and refunded
+    can_cancel: bool = False    # True while the guest is still allowed to cancel it (the page shows the Cancel button only then)
+    # <<< END CANCEL FEATURE
+    # >>> CANCEL FEATURE (new): the cancellation rule
+# Cancellation rule: a guest can cancel up to the day before the event and gets a FULL refund.
+# Change this number to change the rule (1 = until the day before, 2 = until two days before, and so on).
+CANCEL_DAYS_BEFORE = 1
 
+# True if a booking for this event is still allowed to be cancelled. There are two cases:
+#   1. If Ticketmaster has marked the event canceled or postponed, the guest can ALWAYS cancel for a refund,
+#      because it is not their fault the event isn't going ahead as planned.
+#   2. Otherwise the guest can cancel until CANCEL_DAYS_BEFORE days before the event. Days are counted in the stadium's own
+#      time zone (a game in Denver counts Denver's dates), so the rule works the same wherever the stadium is.
+def cancel_allowed(e: Event) -> bool:
+    if e.status in HIDDEN_STATUSES:
+        return True
+    try:
+        today = datetime.now(ZoneInfo(e.timezone)).date()
+    except Exception:
+        today = datetime.now(CHICAGO).date()          # unknown time zone name, so fall back to Chicago
+    event_day = datetime.strptime(e.date, "%Y-%m-%d").date()
+    return event_day - today >= timedelta(days=CANCEL_DAYS_BEFORE)
+# <<< END CANCEL FEATURE
 # Builds a BookingOut by looking up the spot and event that a saved booking belongs to.
 def booking_out(b: Booking, db: Session) -> BookingOut:
     l = db.get(Listing, b.listing_id)
     e = db.get(Event, l.event_id)
+    canceled = b.status == "canceled"                  # >>> CANCEL FEATURE (new line): a canceled booking keeps its row, so there is always a record
     return BookingOut(id=b.id, event=e.name, venue=e.venue, address=l.address, date=e.date,
                       start=b.start_at.astimezone(CHICAGO).strftime("%H:%M"),
                       end=b.end_at.astimezone(CHICAGO).strftime("%H:%M"),
-                      plate=b.plate, amount=b.amount / 100)
-
+                      plate=b.plate, amount=b.amount / 100,
+                      cancelled=canceled, can_cancel=(b.status == "confirmed") and cancel_allowed(e))   # >>> CANCEL FEATURE (changed: the two new fields are filled in here)
 # POST /bookings: book and pay for a spot. The guest must be signed in (u: Me).
 @app.post("/bookings", response_model=BookingOut, status_code=201)
 def create_booking(d: BookingIn, u: Me, db: DB):
@@ -374,7 +397,51 @@ def get_booking(booking_id: str, u: Me, db: DB):
     if not b or b.guest_id != u.id:
         raise HTTPException(404, "Booking not found.")
     return booking_out(b, db)
+# >>> CANCEL FEATURE (new section): the two routes that list bookings and cancel one
+# ---------- cancelling a booking ----------
+# GET /bookings: every booking the signed-in guest has made, newest first. The "My bookings" page uses this.
+@app.get("/bookings", response_model=list[BookingOut])
+def my_bookings(u: Me, db: DB):
+    rows = db.query(Booking).filter(Booking.guest_id == u.id).order_by(Booking.created_at.desc()).all()
+    return [booking_out(b, db) for b in rows]
 
+# POST /bookings/{booking_id}/cancel: cancels one booking and refunds the guest in full.
+# Steps: (1) make sure it is theirs, (2) make sure the cancellation rule still allows it, (3) refund the money with Stripe,
+# (4) ONLY THEN mark the booking "canceled", which frees the spot for other guests (is_available ignores canceled bookings).
+# The money goes back first on purpose: if the refund fails, the booking stays active and the guest hasn't lost anything.
+@app.post("/bookings/{booking_id}/cancel", response_model=BookingOut)
+def cancel_booking(booking_id: str, u: Me, db: DB):
+    b = db.get(Booking, booking_id)
+    if not b or b.guest_id != u.id:                  # someone else's booking looks the same as one that doesn't exist
+        raise HTTPException(404, "Booking not found.")
+    l = db.get(Listing, b.listing_id)
+    e = db.get(Event, l.event_id)
+
+    # Use the same per-spot lock as booking, so a cancel and a new booking for this spot can't collide.
+    with lock_for(l.id):
+        db.refresh(b)                                # re-read the booking in case it changed a moment ago
+        if b.status == "canceled":                   # already canceled (maybe the button was pressed twice): nothing more to do
+            return booking_out(b, db)
+        if b.status != "confirmed":
+            raise HTTPException(409, "This booking can't be cancelled.")
+        if not cancel_allowed(e):
+            raise HTTPException(409, "This booking can no longer be cancelled because the event is too close.")
+
+        try:
+            refund_booking(b.payment_intent_id, b.id)
+        except PaymentUnavailable:
+            raise HTTPException(503, "We couldn't process the refund right now, so your booking has NOT been cancelled and you have not lost anything. Please try again in a few minutes.")
+
+        try:
+            b.status = "canceled"
+            db.commit()
+        except Exception as ex:
+            # Refunded but not marked canceled. Pressing Cancel again is safe: the refund is not repeated, and this step is retried.
+            print("Cancel save failed:", repr(ex))
+            db.rollback()
+            raise HTTPException(500, "Your refund went through, but we couldn't update your booking. Please press Cancel again to finish.")
+    return booking_out(b, db)
+# <<< END CANCEL FEATURE (new section)
 # ---------- Stripe webhook (safety net) ----------
 # A webhook is Stripe calling OUR server to say "this payment succeeded". We normally save the booking right away in
 # POST /bookings, but a crash or a lost connection at the wrong moment could leave a paid guest with no booking.

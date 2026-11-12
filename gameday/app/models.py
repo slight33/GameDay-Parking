@@ -112,7 +112,7 @@ class Booking(Base):
     plate: Mapped[str]                                  # the guest's licence plate, e.g. "ABC123"
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))   # booked from
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))     # booked until
-    status: Mapped[str] = mapped_column(default="confirmed")
+    status: Mapped[str] = mapped_column(default="confirmed")   # >>> CANCEL FEATURE (comment only, no database change): confirmed | canceled (a canceled booking is kept as a record, but no longer blocks the spot)
     amount: Mapped[int]                                 # price paid, in cents
     payment_intent_id: Mapped[str] = mapped_column(String, unique=True)
     request_id: Mapped[str] = mapped_column(String, unique=True)

@@ -125,3 +125,21 @@ def refund(payment_intent_id: str) -> None:
         stripe.Refund.create(payment_intent=payment_intent_id)
     except stripe.StripeError as e:
         print("REFUND FAILED, refund by hand in Stripe:", payment_intent_id, repr(e))
+# >>> CANCEL FEATURE (new function)
+# Cancelling: give the guest their money back for a booking they cancelled.
+# Unlike refund() above, this one REPORTS failure (by raising PaymentUnavailable), because a booking must only be marked
+# canceled if the money really was returned. If the refund fails, the booking stays active and the guest loses nothing.
+# The booking id is used as Stripe's "idempotency key", so pressing Cancel twice can never refund twice.
+# If Stripe says this payment was already refunded (for example the first try worked but the reply was lost), that counts as success.
+def refund_booking(payment_intent_id: str, booking_id: str) -> None:
+    if not stripe.api_key:
+        print("Stripe error: STRIPE_SECRET_KEY is not set")
+        raise PaymentUnavailable()
+    try:
+        stripe.Refund.create(payment_intent=payment_intent_id, idempotency_key=f"cancel-{booking_id}")
+    except stripe.StripeError as e:
+        if getattr(e, "code", None) == "charge_already_refunded":
+            return
+        print("Stripe refund error:", repr(e))
+        raise PaymentUnavailable()
+# <<< END CANCEL FEATURE

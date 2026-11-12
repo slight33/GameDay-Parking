@@ -102,6 +102,9 @@ actions.innerHTML =
   (user.role === "guest"
     ? '<a class="btn btn-accent" href="/host_upgrade">Become a host</a>'
     : '<a class="btn btn-accent" href="/create_listing">Create listing</a>') +
+  // >>> CANCEL FEATURE (new): "My bookings" opens the page where a guest can see their bookings and cancel one.
+  '<a class="btn btn-ghost" href="/my_bookings">My bookings</a>' +
+  // <<< END CANCEL FEATURE
   '<button type="button" class="btn btn-ghost" id="logout-button">Log out</button>';
 actions.querySelector(".user-name").textContent = user.username;
 document.getElementById("logout-button").addEventListener("click", logout);

@@ -21,7 +21,10 @@
     <h1 class="page-title">You’re booked!</h1>
     <p class="muted" id="note">Loading your booking…</p>
     <ul class="summary" id="details" hidden></ul>
-    <a class="btn btn-primary" href="/">Browse more events</a>
+        <a class="btn btn-primary" href="/">Browse more events</a>
+    <!-- >>> CANCEL FEATURE (new): bookings can be viewed and cancelled on the My bookings page. -->
+    <a class="btn btn-accent" href="/my_bookings">My bookings</a>
+    <!-- <<< END CANCEL FEATURE -->
   </main>
 
   <script>
@@ -56,7 +59,10 @@
           list.append(li);
         });
         list.hidden = false;
-        note.textContent = "Your payment went through. Keep this booking number.";
+               note.textContent = "Your payment went through. Keep this booking number.";
+        // >>> CANCEL FEATURE (new): can_cancel is true while the cancellation rule still allows it, so we tell the guest where to cancel.
+        if (b.can_cancel) note.textContent += " You can cancel for a full refund until the day before the event, from My bookings.";
+        // <<< END CANCEL FEATURE
       } catch (err) {
         note.textContent = err.message;
         note.className = "status-error";
