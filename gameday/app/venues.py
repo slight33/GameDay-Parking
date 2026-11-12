@@ -14,13 +14,3 @@ VENUES = [
     {"tm_id": "KovZpZAEkvtA", "name": "Hard Rock Stadium"},
     {"tm_id": "KovZpa3Wne", "name": "Empower Field at Mile High"},
 ]
-for name in NAMES:
-    params = urlencode({"keyword": name, "countryCode": "US", "apikey": KEY})
-    with urlopen(f"https://app.ticketmaster.com/discovery/v2/venues.json?{params}", timeout=10) as r:
-        data = json.load(r)
-    print(f"\n{name}")
-    for v in data.get("_embedded", {}).get("venues", []):
-        city = v.get("city", {}).get("name", "")
-        state = v.get("state", {}).get("stateCode", "")
-        upcoming = v.get("upcomingEvents", {}).get("_total", 0)
-        print(f"  {v['id']}  {v['name']}  ({city}, {state})  upcoming events: {upcoming}")
