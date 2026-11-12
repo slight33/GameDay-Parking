@@ -1,0 +1,30 @@
+<!--Ai Generated-->
+<!--My bookings page: shows every booking the signed-in guest has made and lets them cancel one (for a full refund)
+    while the cancellation rule allows it. my_bookings.js fills in the list.-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My bookings · GameDay Parking</title>
+  <link rel="stylesheet" href="/static/home_style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="btn btn-ghost" href="/">&larr; All events</a>
+      <span class="brand">GameDay Parking</span>
+    </div>
+  </header>
+
+  <main class="page">
+    <h1 class="page-title">My bookings</h1>
+    <!-- Messages go here, such as "Booking cancelled" or an error. -->
+    <p class="muted" id="note">Loading…</p>
+    <!-- The booking cards are added here. -->
+    <ul class="spot-list" id="list"></ul>
+  </main>
+
+  <script src="/static/js/my_bookings.js"></script>
+</body>
+</html>
