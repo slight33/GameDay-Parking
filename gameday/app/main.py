@@ -188,7 +188,7 @@ def event_listings(event_id: str, db: DB, response: Response):
     if not e:
         raise HTTPException(404, "Event not found.")
     response.headers["Cache-Control"] = "public, max-age=15"
-    spots = db.query(Listing).filter(Listing.event_id == e.id).order_by(Listing.dist).all()
+    spots = db.query(Listing).filter(Listing.event_id == e.id, Listing.active).order_by(Listing.dist).all()
     return EventSpots(
         event=EventOut(id=e.id, name=e.name, venue=e.venue, date=e.date, time=e.time,
                        lat=e.lat, lng=e.lng, spots=len(spots)),
