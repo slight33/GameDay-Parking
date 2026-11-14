@@ -170,7 +170,7 @@ def events(db: DB, response: Response):
     maybe_sync(db)   # refreshes from Ticketmaster if the last sync is over 12 hours old
     response.headers["Cache-Control"] = "public, max-age=30"
     cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-    counts = dict(db.query(Listing.event_id, func.count(Listing.id)).group_by(Listing.event_id).all())
+    counts = dict(db.query(Listing.event_id, func.count(Listing.id)).filter(Listing.active).group_by(Listing.event_id).all())
     venue_ids = [v["tm_id"] for v in VENUES]
     rows = (db.query(Event)
             .filter(Event.date >= cutoff,
@@ -550,6 +550,56 @@ def create_listing(d: ListingIn, u: Me, db: DB):
     db.commit()
     return l
 
+
+# ---------- my listings (hosts only) ----------
+# HostListingOut: one listing plus its event's details, for the host's My listings page.
+class HostListingOut(BaseModel):
+    id: str; event: str; venue: str; date: str; timezone: str
+    address: str; price: float; start_at: datetime; end_at: datetime; overstay: float
+    security: str; stacked: bool; walk: int
+    bookings: int   # how many confirmed bookings this spot has
+
+# GET /host/listings: every active listing the logged-in host has created, soonest first.
+@app.get("/host/listings", response_model=list[HostListingOut])
+def host_listings(u: Me, db: DB):
+    if u.role != "host":
+        raise HTTPException(403, "Only hosts have listings.")
+    rows = (db.query(Listing, Event).join(Event, Event.id == Listing.event_id)
+            .filter(Listing.host_id == u.id, Listing.active)
+            .order_by(Listing.start_at).all())
+    counts = dict(db.query(Booking.listing_id, func.count(Booking.id))
+                  .filter(Booking.status == "confirmed").group_by(Booking.listing_id).all())
+    return [HostListingOut(id=l.id, event=e.name, venue=e.venue, date=e.date, timezone=e.timezone,
+                           address=l.address, price=l.price, start_at=l.start_at, end_at=l.end_at,
+                           overstay=l.overstay, security=l.security, stacked=l.stacked, walk=l.walk,
+                           bookings=counts.get(l.id, 0)) for l, e in rows]
+
+# POST /listings/{listing_id}/cancel: hides the host's listing and refunds anyone who booked it.
+# Each refund is saved as it happens, so if one fails partway, the ones already refunded are recorded
+# and the host can press cancel again to finish the rest.
+@app.post("/listings/{listing_id}/cancel")
+def cancel_listing(listing_id: str, u: Me, db: DB):
+    l = db.get(Listing, listing_id)
+    if not l or l.host_id != u.id:
+        raise HTTPException(404, "Listing not found.")
+    if not l.active:
+        return {"refunded": 0}   # already canceled
+
+    # Same lock as booking, so nobody can book this spot while it's being canceled.
+    with lock_for(l.id):
+        booked = db.query(Booking).filter(Booking.listing_id == l.id, Booking.status == "confirmed").all()
+        for b in booked:
+            try:
+                refund(b.payment_intent_id)
+            except Exception as ex:
+                print("Refund failed while canceling listing:", repr(ex))
+                raise HTTPException(502, "A guest's refund couldn't be processed, so the listing wasn't canceled. Try again in a few minutes.")
+            b.status = "refunded"
+            db.commit()
+        l.active = False
+        db.commit()
+    return {"refunded": len(booked)}
+
 # ---------- pages ----------
 #Serves frontend HTML files for the root, login, and registration pages.
 @app.get("/", include_in_schema=False)
@@ -574,3 +624,7 @@ def create_listing_page():
 @app.get("/my_bookings", include_in_schema=False)
 def my_bookings_page():
     return FileResponse(STATIC / "my_bookings.html")
+
+@app.get("/my_listings", include_in_schema=False)
+def my_listings_page():
+    return FileResponse(STATIC / "my_listings.html")

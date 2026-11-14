@@ -1,0 +1,140 @@
+<!--Ai Generated-->
+<!--This page will display a host's active listings, allowing them to cancel if needed-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My listings · GameDay Parking</title>
+  <link rel="stylesheet" href="/static/home_style.css">
+  <style>
+    /* Listing cards, drawn like the event cards: asphalt with painted lines on three sides. */
+    .listing-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.25rem; }
+    .listing-card {
+      background: var(--asphalt-light, #2F3439); color: #fff;
+      border: solid var(--paint, #F2C230); border-width: 6px 6px 0;
+      padding: 1.25rem; display: flex; flex-direction: column; gap: 0.35rem;
+    }
+    .listing-card h2 { margin: 0 0 0.25rem; font-size: 1.3rem; }
+    .listing-card p { margin: 0; color: #C8CDD1; }
+    .listing-card .btn { align-self: flex-start; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="btn btn-ghost" href="/">&larr; All events</a>
+      <span class="brand">GameDay Parking</span>
+    </div>
+  </header>
+
+  <main class="page" hidden>
+    <h1 class="page-title">My listings</h1>
+    <p class="muted" id="note">Loading…</p>
+    <!-- Shown only when the host has no listings. -->
+    <a class="btn btn-accent" id="create-link" href="/create_listing" hidden>Create a listing</a>
+    <ul class="listing-list" id="list"></ul>
+  </main>
+
+<script>
+// Same server locally, Render everywhere else.
+const API = ["localhost", "127.0.0.1"].includes(location.hostname)
+  ? ""
+  : "https://gameday-parking.onrender.com";
+const TOKEN_KEY = "gdp-token";
+const token = localStorage.getItem(TOKEN_KEY);
+const auth = { Authorization: "Bearer " + token };
+
+const list = document.getElementById("list");
+const note = document.getElementById("note");
+const createLink = document.getElementById("create-link");
+
+const money = (n) => "$" + Number(n).toFixed(2).replace(/\.00$/, "");
+// Times and dates are shown in the venue's own time zone.
+const clock = (iso, tz) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: tz });
+const day = (iso, tz) => new Date(iso).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", timeZone: tz });
+
+// Makes an element with optional class and text. textContent is used so database text can't run as code.
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text) node.textContent = text;
+  return node;
+}
+
+// Shows the "no listings" message and the button to create one.
+function showEmpty() {
+  note.textContent = "You don't have any listings yet.";
+  createLink.hidden = false;
+}
+
+function renderListing(l) {
+  const card = el("li", "listing-card");
+  card.append(
+    el("h2", null, l.event),
+    el("p", null, `${l.venue} · ${day(l.start_at, l.timezone)}`),
+    el("p", null, l.address),
+    el("p", null, `Available ${clock(l.start_at, l.timezone)}–${clock(l.end_at, l.timezone)} · ${l.walk} min walk`),
+    el("p", null, `${money(l.price)} · overstay ${money(l.overstay)} per 15 min`),
+    el("p", null, l.stacked ? "Stacked parking" : "No stacked parking"),
+    el("p", null, `Bookings: ${l.bookings}`)
+  );
+  if (l.security) card.append(el("p", null, `Security: ${l.security}`));
+
+  const btn = el("button", "btn btn-ghost", "Cancel listing");
+  btn.type = "button";
+  btn.addEventListener("click", () => cancelListing(l, card, btn));
+  card.append(btn);
+  list.append(card);
+}
+
+/* confirms with the host to make sure they want to cancel*/
+async function cancelListing(l, card, btn) {
+  const warning = l.bookings
+    ? `This spot has ${l.bookings} booking(s). Canceling refunds those guests in full.\n\nCancel this listing?`
+    : "Cancel this listing?";
+  if (!confirm(warning)) return;
+
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/listings/${encodeURIComponent(l.id)}/cancel`, { method: "POST", headers: auth });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      note.textContent = typeof data.detail === "string" ? data.detail : "Couldn't cancel this listing. Try again.";
+      btn.disabled = false;
+      return;
+    }
+    card.remove();
+    note.textContent = data.refunded ? `Listing canceled. ${data.refunded} guest(s) refunded.` : "Listing canceled.";
+    if (!list.children.length) showEmpty();
+  } catch (err) {
+    note.textContent = "Couldn't reach the server. Is it running?";
+    btn.disabled = false;
+  }
+}
+
+// Only hosts can use this page. Everyone else is sent back to the home page.
+async function load() {
+  if (!token) return location.replace("/");
+  try {
+    const me = await fetch(`${API}/me`, { headers: auth });
+    if (!me.ok) { localStorage.removeItem(TOKEN_KEY); return location.replace("/"); }
+    if ((await me.json()).role !== "host") return location.replace("/");
+    document.querySelector("main").hidden = false;
+
+    const res = await fetch(`${API}/host/listings`, { headers: auth });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { note.textContent = typeof data.detail === "string" ? data.detail : "Couldn't load your listings."; return; }
+
+    if (!data.length) return showEmpty();
+    note.textContent = "";
+    data.forEach(renderListing);
+  } catch (err) {
+    note.textContent = "Couldn't reach the server. Is it running?";
+  }
+}
+
+load();
+</script>
+</body>
+</html>
