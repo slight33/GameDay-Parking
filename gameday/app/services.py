@@ -143,3 +143,18 @@ def refund_booking(payment_intent_id: str, booking_id: str) -> None:
         print("Stripe refund error:", repr(e))
         raise PaymentUnavailable()
 # <<< END CANCEL FEATURE
+# >>> DASHBOARD (new function)
+# Dashboard: asks Stripe for the link to a payment's official receipt page (the same page Stripe can email to the guest).
+# Raises PaymentUnavailable if Stripe can't be reached. Returns None if Stripe has no receipt page for the payment.
+def receipt_url(payment_intent_id: str) -> str | None:
+    if not stripe.api_key:
+        print("Stripe error: STRIPE_SECRET_KEY is not set")
+        raise PaymentUnavailable()
+    try:
+        pi = stripe.PaymentIntent.retrieve(payment_intent_id, expand=["latest_charge"])
+    except stripe.StripeError as e:
+        print("Stripe receipt error:", repr(e))
+        raise PaymentUnavailable()
+    latest = getattr(pi, "latest_charge", None)       # the charge that paid for this booking
+    return getattr(latest, "receipt_url", None)
+# <<< END DASHBOARD

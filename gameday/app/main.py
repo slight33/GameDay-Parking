@@ -599,7 +599,131 @@ def cancel_listing(listing_id: str, u: Me, db: DB):
         l.active = False
         db.commit()
     return {"refunded": len(booked)}
+# >>> DASHBOARD (new section)
+# ---------- dashboard (guests) ----------
+# The dashboard shows a guest all of their bookings in one place, split into "Upcoming" and "Past", with the spot details,
+# the host's contact details and a receipt for each one. The dashboard page (dashboard.html) asks for this with ONE request.
+from .services import receipt_url
 
+# HostContactOut: the host details a guest is allowed to see for a booking THEY made.
+# Every field has a fallback, so a host whose account is missing shows "Host details unavailable" instead of breaking the page.
+class HostContactOut(BaseModel):
+    name: str = "Host details unavailable"
+    email: str = ""
+    phone: str = ""
+
+# ReceiptOut: the payment details for one booking, built from what we saved when the guest paid.
+class ReceiptOut(BaseModel):
+    number: str                       # the booking number, which doubles as the receipt number
+    amount: float = 0                 # price paid, in dollars
+    paid_at: datetime | None = None   # when the payment was taken
+    payment_id: str = ""              # Stripe's id for the payment, useful if the guest ever has to ask about the charge
+
+# DashBookingOut: everything the dashboard shows for one booking.
+# The times are sent as full date-times, and the page shows them in the stadium's own time zone (the "timezone" field).
+# Every field that could be missing in an old or damaged booking has a fallback, so the page never receives a hole.
+class DashBookingOut(BaseModel):
+    id: str; event: str; venue: str; date: str; timezone: str
+    start_at: datetime | None = None; end_at: datetime | None = None
+    address: str; walk: int = 0; security: str = ""; stacked: bool = False
+    plate: str; status: str                  # status is "confirmed", "canceled" or "refunded" (the host canceled the spot)
+    can_cancel: bool = False                 # True while the guest may still cancel (same rule as the Cancel button)
+    host: HostContactOut
+    receipt: ReceiptOut
+
+# DashboardOut: the two lists the page shows. An empty list simply means "nothing to show here".
+class DashboardOut(BaseModel):
+    upcoming: list[DashBookingOut]
+    past: list[DashBookingOut]
+
+# Times read back from SQLite come without a time zone attached (PostgreSQL keeps it). This puts one back, so the browser
+# shows the right hour. Booking hours were saved as Chicago times, and "paid at" as UTC. A missing time stays missing.
+def with_zone(dt: datetime | None, tz) -> datetime | None:
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=tz)
+
+# Turns a time zone name like "America/Denver" into a time zone. A missing or unknown name falls back to Chicago.
+def zone_or_chicago(name: str | None) -> ZoneInfo:
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return CHICAGO
+
+# Builds the dashboard entry for ONE booking. The spot, event and host can each be None (for example a deleted account),
+# and every one of those cases gets a safe fallback instead of an error.
+def dash_booking(b: Booking, l: Listing | None, e: Event | None, host: User | None) -> DashBookingOut:
+    tz = zone_or_chicago(e.timezone if e else None)
+    return DashBookingOut(
+        id=b.id,
+        event=e.name if e else "Event no longer available",
+        venue=e.venue if e else "",
+        date=e.date if e else "",
+        timezone=tz.key,
+        start_at=with_zone(b.start_at, CHICAGO),
+        end_at=with_zone(b.end_at, CHICAGO),
+        address=l.address if l else "Spot no longer available",
+        walk=(l.walk or 0) if l else 0,
+        security=(l.security or "") if l else "",
+        stacked=bool(l.stacked) if l else False,
+        plate=b.plate or "",
+        status=b.status or "confirmed",
+        can_cancel=(b.status == "confirmed") and e is not None and cancel_allowed(e),
+        host=HostContactOut(name=host.name, email=host.email, phone=host.phone) if host else HostContactOut(),
+        receipt=ReceiptOut(number=b.id, amount=(b.amount or 0) / 100,
+                           paid_at=with_zone(b.created_at, timezone.utc), payment_id=b.payment_intent_id or ""))
+
+# Splits the bookings into "upcoming" and "past".
+#   Upcoming = still confirmed AND not finished yet (the soonest one first).
+#   Past     = everything else: finished bookings, and canceled or refunded ones (the most recent one first).
+def split_bookings(items: list[DashBookingOut], now: datetime):
+    upcoming = [i for i in items if i.status == "confirmed" and i.end_at and i.end_at > now]
+    upcoming_ids = {i.id for i in upcoming}
+    past = [i for i in items if i.id not in upcoming_ids]
+    upcoming.sort(key=lambda i: i.start_at or i.end_at)      # a booking with no start time (damaged data) is sorted by its end time
+    past.sort(key=lambda i: (i.start_at is not None, i.start_at or now), reverse=True)   # bookings with no start time go last
+    return upcoming, past
+
+# GET /dashboard/bookings: the signed-in guest's bookings, split into upcoming and past.
+# SECURITY: whose bookings to show comes ONLY from the login token (u). There is deliberately no user id in the address or
+# in the request, so changing a number in the address (like ?user_id=124) can't show anyone else's bookings, host contact
+# details or receipts. Never add a "which user" input to this route.
+@app.get("/dashboard/bookings", response_model=DashboardOut)
+def dashboard_bookings(u: Me, db: DB):
+    # outerjoin keeps a booking even if its spot or event row is missing, so one damaged booking can't hide the others.
+    rows = (db.query(Booking, Listing, Event)
+            .outerjoin(Listing, Listing.id == Booking.listing_id)
+            .outerjoin(Event, Event.id == Listing.event_id)
+            .filter(Booking.guest_id == u.id)
+            .all())
+    # Look up all the hosts in ONE query (instead of one query per booking).
+    host_ids = {l.host_id for _, l, _ in rows if l}
+    hosts = {h.id: h for h in db.query(User).filter(User.id.in_(host_ids)).all()} if host_ids else {}
+    items = []
+    for b, l, e in rows:
+        try:
+            items.append(dash_booking(b, l, e, hosts.get(l.host_id) if l else None))
+        except Exception as ex:             # one damaged booking is skipped (and printed) instead of breaking the whole page
+            print("Dashboard skipped booking", b.id, repr(ex))
+    upcoming, past = split_bookings(items, datetime.now(timezone.utc))
+    return DashboardOut(upcoming=upcoming, past=past)
+
+# GET /bookings/{booking_id}/receipt: the link to Stripe's official receipt page for one booking.
+# It is asked for only when the guest clicks "View Stripe receipt", not for every booking in the list, so the dashboard stays fast.
+# Only the guest who made the booking can ask for it.
+@app.get("/bookings/{booking_id}/receipt")
+def booking_receipt(booking_id: str, u: Me, db: DB):
+    b = db.get(Booking, booking_id)
+    if not b or b.guest_id != u.id:
+        raise HTTPException(404, "Booking not found.")
+    try:
+        url = receipt_url(b.payment_intent_id)
+    except PaymentUnavailable:
+        raise HTTPException(503, "We couldn't reach the payment system just now. Please try again in a few minutes.")
+    if not url:
+        raise HTTPException(404, "Stripe doesn't have a receipt page for this payment.")
+    return {"url": url}
+# <<< END DASHBOARD (new section)
 # ---------- pages ----------
 #Serves frontend HTML files for the root, login, and registration pages.
 @app.get("/", include_in_schema=False)
@@ -628,3 +752,9 @@ def my_bookings_page():
 @app.get("/my_listings", include_in_schema=False)
 def my_listings_page():
     return FileResponse(STATIC / "my_listings.html")
+
+# >>> DASHBOARD (new): serves the dashboard page
+@app.get("/dashboard", include_in_schema=False)
+def dashboard_page():
+    return FileResponse(STATIC / "dashboard.html")
+# <<< END DASHBOARD

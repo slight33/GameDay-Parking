@@ -438,3 +438,29 @@ body {
   opacity: 0.65;
 }
 /* <<< END CANCEL FEATURE */
+/* >>> DASHBOARD (new styles, everything below this line) */
+/* ---------- Dashboard page: the receipt box and host line inside each booking card ---------- */
+
+/* The receipt opens and closes like a small drawer. */
+.receipt {
+  margin-top: 0.7rem;
+  padding: 0.6rem 0.8rem;
+  background: #F7F8F5;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+.receipt summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.receipt .btn {
+  margin-top: 0.5rem;
+}
+
+/* The host's phone and email are links, so they get the same dark colour as the text around them. */
+.host-line a {
+  color: inherit;
+}
+/* <<< END DASHBOARD */

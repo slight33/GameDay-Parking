@@ -1,0 +1,46 @@
+<!--Ai Generated-->
+<!--Dashboard page (task dashui): shows the signed-in guest's bookings in two sections, "Upcoming bookings" and "Past bookings".
+    Each booking shows the spot details, the host's contact details and a receipt. dashboard.js fills everything in.
+    If the guest has no bookings at all, a prompt with a button to browse upcoming events is shown instead.-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My dashboard · GameDay Parking</title>
+  <link rel="stylesheet" href="/static/home_style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="btn btn-ghost" href="/">&larr; All events</a>
+      <span class="brand">GameDay Parking</span>
+    </div>
+  </header>
+
+  <main class="page">
+    <h1 class="page-title">My dashboard</h1>
+    <!-- Messages go here, such as "Loading...", "Booking cancelled" or an error. -->
+    <p class="muted" id="note">Loading…</p>
+
+    <!-- The empty state: shown only when the guest has no bookings at all. -->
+    <div class="empty-state" id="empty-box" hidden>
+      <p>You haven’t booked any parking yet.</p>
+      <a class="btn btn-accent" href="/">Browse upcoming events</a>
+    </div>
+
+    <!-- The two sections. They stay hidden until the bookings have loaded. -->
+    <div id="sections" hidden>
+      <h2 class="section-title">Upcoming bookings</h2>
+      <p class="muted" id="upcoming-empty" hidden>No upcoming bookings. <a href="/">Browse upcoming events</a></p>
+      <ul class="spot-list" id="upcoming-list"></ul>
+
+      <h2 class="section-title">Past bookings</h2>
+      <p class="muted" id="past-empty" hidden>Nothing here yet. Finished and cancelled bookings will show up in this section.</p>
+      <ul class="spot-list" id="past-list"></ul>
+    </div>
+  </main>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
