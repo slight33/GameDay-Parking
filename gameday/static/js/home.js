@@ -3,23 +3,40 @@ const CARD_COUNT = 6;
 const API = ["localhost", "127.0.0.1"].includes(location.hostname)
   ? ""
   : "https://gameday-parking.onrender.com";
-const grid = document.getElementById("event-grid");
+const container = document.getElementById("events");
 const searchForm = document.getElementById("search-form");
 const searchInput = document.getElementById("search-input");
 
+// The sections shown on the home page, in order. The key matches each event's category from the backend.
+// Events with any other category go in the last section.
+const SECTIONS = [
+  { key: "nfl", title: "NFL games" },
+  { key: "concert", title: "Concerts" },
+  { key: "other", title: "More events" },
+];
 
-function renderEmptyCards(count) {
-  for (let i = 0; i < count; i++) {
-    const card = document.createElement("div");
-    card.className = "card";
-    grid.append(card);
-  }
-}
+let allEvents = [];   // every upcoming event from the backend, kept so the page can be redrawn without a new request
 
+let query = "";       // what's typed in the search box
+let loaded = false;   // true once the events have arrived, so typing early doesn't hide the placeholders
+
+// Filter as the user types. Pressing Enter or the Search button does the same thing.
+searchInput.addEventListener("input", () => {
+  query = searchInput.value;
+  if (loaded) render();
+});
 searchForm.addEventListener("submit", (event) => {
   event.preventDefault(); // stops the page from reloading
-  console.log("Search:", searchInput.value.trim()); // TODO: search events once the backend has them
+  query = searchInput.value;
+  if (loaded) render();
 });
+
+// True if every word typed appears in the event's name or venue, in any order.
+// So "bills dolphins" finds "Buffalo Bills vs. Miami Dolphins".
+function matches(ev, words) {
+  const text = `${ev.name} ${ev.venue}`.toLowerCase();
+  return words.every((w) => text.includes(w));
+}
 
 // Turns "2026-11-15" and "12:00" into something readable, in the visitor's own time zone.
 function formatWhen(date, time) {
@@ -28,37 +45,7 @@ function formatWhen(date, time) {
   return new Date(y, m - 1, d, h, min).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-// Draws one clickable card per event. Each card links to the browse page and puts the event's id in the URL
-// (browse.html?event=v2) so that page knows which event's parking spots to show.
-// textContent is used (not innerHTML) so text from the database can never run as code.
-function renderEvents(events) {
-  grid.replaceChildren();
-  if (!events.length) {
-    grid.append(gridNote("No upcoming events right now."));
-    return;
-  }
-  events.forEach((ev) => {
-    const card = document.createElement("a");
-    card.className = "card event-card";
-    card.href = `/static/browse.html?event=${encodeURIComponent(ev.id)}`;
-
-    const name = document.createElement("h3");
-    name.textContent = ev.name;
-    const venue = document.createElement("p");
-    venue.textContent = ev.venue;
-    const when = document.createElement("p");
-    when.className = "event-when";
-    when.textContent = formatWhen(ev.date, ev.time);
-    const spots = document.createElement("p");
-    spots.className = "event-spots";
-    spots.textContent = ev.spots === 0 ? "No spots yet" : ev.spots + (ev.spots === 1 ? " spot" : " spots");
-
-    card.append(name, venue, when, spots);
-    grid.append(card);
-  });
-}
-
-// A short message that fills the whole card grid (used for "no events" and error messages).
+// A short message shown in place of the events (used for "no events" and error messages).
 function gridNote(text) {
   const p = document.createElement("p");
   p.className = "grid-note";
@@ -66,7 +53,74 @@ function gridNote(text) {
   return p;
 }
 
-// Asks the backend for the upcoming events and draws them. One request, no polling.
+// Empty placeholder cards shown while the events load.
+function renderEmptyCards(count) {
+  const grid = document.createElement("div");
+  grid.className = "card-grid";
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement("div");
+    card.className = "card";
+    grid.append(card);
+  }
+  container.replaceChildren(grid);
+}
+
+// Builds one clickable card. It links to the browse page with the event's id in the URL
+// (browse.html?event=...) so that page knows which event's parking spots to show.
+// textContent is used (not innerHTML) so text from the database can never run as code.
+function eventCard(ev) {
+  const card = document.createElement("a");
+  card.className = "card event-card";
+  card.href = `/static/browse.html?event=${encodeURIComponent(ev.id)}`;
+
+  const name = document.createElement("h3");
+  name.textContent = ev.name;
+  const venue = document.createElement("p");
+  venue.textContent = ev.venue;
+  const when = document.createElement("p");
+  when.className = "event-when";
+  when.textContent = formatWhen(ev.date, ev.time);
+  const spots = document.createElement("p");
+  spots.className = "event-spots";
+  spots.textContent = ev.spots === 0 ? "No spots yet" : ev.spots + (ev.spots === 1 ? " spot" : " spots");
+
+  card.append(name, venue, when, spots);
+  return card;
+}
+
+// Draws the page from allEvents: filter, then sort, then group into sections, then draw.
+// The search and sort steps will plug in here, so everything redraws through this one function.
+function render() {
+  // Filter step: keep events that match the search.
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const list = allEvents.filter((ev) => matches(ev, words));   // already sorted by date and time by the backend
+
+  container.replaceChildren();
+  if (!list.length) {
+    container.append(gridNote(words.length
+      ? `No events match "${query.trim()}". Try a team, artist, or stadium.`
+      : "No upcoming events right now."));
+    return;
+  }
+
+
+  const keys = SECTIONS.map((s) => s.key);
+  for (const section of SECTIONS) {
+    // An event goes in its category's section, or in the last one if its category isn't listed.
+    const events = list.filter((ev) => (keys.includes(ev.category) ? ev.category : "other") === section.key);
+    if (!events.length) continue;   // skip empty sections
+
+    const heading = document.createElement("h2");
+    heading.className = "section-title";
+    heading.textContent = section.title;
+    const grid = document.createElement("div");
+    grid.className = "card-grid";
+    events.forEach((ev) => grid.append(eventCard(ev)));
+    container.append(heading, grid);
+  }
+}
+
+// Asks the backend for the upcoming events, keeps them, and draws them. One request, no polling.
 // Past events are also hidden here using the visitor's local date.
 async function loadEvents() {
   renderEmptyCards(CARD_COUNT);   // placeholders while we wait
@@ -75,10 +129,12 @@ async function loadEvents() {
     if (!res.ok) throw new Error("Server returned " + res.status);
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    renderEvents((await res.json()).filter((ev) => ev.date >= today));
+    allEvents = (await res.json()).filter((ev) => ev.date >= today);
+    loaded = true;
+    render();
   } catch (err) {
     console.error(err);
-    grid.replaceChildren(gridNote("Couldn’t load events. Try again in a moment."));
+    container.replaceChildren(gridNote("Couldn’t load events. Try again in a moment."));
   }
 }
 loadEvents();

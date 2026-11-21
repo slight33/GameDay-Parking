@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode
 from urllib.request import urlopen
 from urllib.error import URLError
+from .models import Event, Listing
 
 from .models import Event
 from .venues import VENUES
@@ -15,8 +16,8 @@ SYNC_EVERY = 12 * 60 * 60   # seconds between syncs (12 hours)
 
 # Ticketmaster lists add-ons like parking passes as their own "events". Any event whose name
 # contains one of these words is skipped. The sync prints what it skips, so this list can be adjusted.
-SKIP_WORDS = ("parking", "tailgate", "suite", "club pass", "premium", "upgrade",
-              "stadium tour", "season ticket", "voucher", "gift card")
+SKIP_WORDS = ("parking", "tailgate", "suite", "club pass", "club seat", "premium", "upgrade",
+              "stadium tour", "season ticket", "voucher", "gift card", "half price", "half-price")
 
 _last_sync = 0.0              # when the last sync finished (0 means "never" since the server started)
 _lock = threading.Lock()      # stops two requests from syncing at the same time
@@ -42,6 +43,19 @@ def _skip_reason(ev: dict) -> str | None:
         return "time TBA"   # skipped for now, since the pages need a start time
     return None
 
+# Picks a category from Ticketmaster's classification, which looks like
+# segment "Sports" > genre "Football" > subGenre "NFL", or segment "Music" for concerts.
+def _category(ev: dict) -> str:
+    c = (ev.get("classifications") or [{}])[0]
+    segment = c.get("segment", {}).get("name", "")
+    genre = c.get("genre", {}).get("name", "")
+    sub = c.get("subGenre", {}).get("name", "")
+    if genre == "Football" and sub == "NFL":
+        return "nfl"
+    if segment == "Music":
+        return "concert"
+    return "other"
+
 # Fetches every venue's events and saves them. If one venue fails, its existing events are kept
 # and the sync moves on to the next venue.
 def sync_events(db) -> None:
@@ -51,6 +65,7 @@ def sync_events(db) -> None:
         return
 
     saved = skipped = 0
+    by_category = {}
     for venue in VENUES:
         try:
             events = _fetch(venue["tm_id"], key)
@@ -64,6 +79,10 @@ def sync_events(db) -> None:
             if reason:
                 skipped += 1
                 print(f"  skipped ({reason}): {ev.get('name')}")
+                # An earlier sync may have saved this before it was skipped. Remove it, unless a host has listed for it.
+                old = db.get(Event, ev["id"])
+                if old and not db.query(Listing).filter(Listing.event_id == old.id).first():
+                    db.delete(old)
                 continue
 
             # Find the event if it's already saved, otherwise create it.
@@ -82,12 +101,14 @@ def sync_events(db) -> None:
             e.lng = float(loc["longitude"])
             e.status = ev["dates"].get("status", {}).get("code", "onsale")
             e.timezone = ev["dates"].get("timezone", "America/Chicago")
+            e.category = _category(ev)
             saved += 1
+            by_category[e.category] = by_category.get(e.category, 0) + 1
 
         time.sleep(0.25)   # stays under Ticketmaster's limit of 5 requests per second
 
     db.commit()
-    print(f"Ticketmaster sync done: {saved} saved, {skipped} skipped.")
+    print(f"Ticketmaster sync done: {saved} saved, {skipped} skipped. By category: {by_category}")
 
 # Runs the sync only if the last one was more than SYNC_EVERY ago.
 # Called at the start of GET /events, so events stay fresh without a scheduled job.

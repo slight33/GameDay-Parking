@@ -147,7 +147,7 @@ def me(u: Me):
 # ---------- events and parking spots (public: no login needed) ----------
 # EventOut: What the API sends for one event. spots is how many parking spots hosts have listed for it.
 class EventOut(BaseModel):
-    id: str; name: str; venue: str; date: str; time: str; lat: float; lng: float
+    id: str; name: str; venue: str; date: str; time: str; lat: float; lng: float; category: str = "other"
     spots: int = 0
 
 # ListingOut: What the API sends for one parking spot. dist is in metres and walk in minutes, both measured from the venue.
@@ -178,7 +178,7 @@ def events(db: DB, response: Response):
                     Event.status.notin_(HIDDEN_STATUSES))
             .order_by(Event.date, Event.time).all())
     return [EventOut(id=e.id, name=e.name, venue=e.venue, date=e.date, time=e.time,
-                     lat=e.lat, lng=e.lng, spots=counts.get(e.id, 0)) for e in rows]
+                     lat=e.lat, lng=e.lng, spots=counts.get(e.id, 0), category=e.category) for e in rows]
 # GET /events/{event_id}/listings: the parking spots for one event, closest to the venue first.
 # Distances and walking times were stored when each listing was created, so this is just a sorted read.
 # Returns 404 if the event id doesn't exist. An event with no spots returns an empty list (the page shows the empty message).
