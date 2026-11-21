@@ -1,3 +1,4 @@
+// Ai generated
 // Adds the same sidebar to every page that loads this file. Its links change with who's logged in.
 // Everything is wrapped in a function so names like API don't clash with the page's own script.
 (function () {
