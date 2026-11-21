@@ -31,6 +31,56 @@ searchForm.addEventListener("submit", (event) => {
   if (loaded) render();
 });
 
+const sortSelect = document.getElementById("sort-select");
+const sortNote = document.getElementById("sort-note");
+let sortBy = "date";    // "date" or "nearest"
+let userLoc = null;     // the visitor's { lat, lng }, only set if they allow it
+
+// Distance in kilometers between two points on Earth (the haversine formula, same as the backend's).
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const a = Math.sin(toRad(lat2 - lat1) / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(lng2 - lng1) / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(a));
+}
+
+// "Nearest to me" order: the closest stadium's events first, then by date and start time.
+function compareNearest(a, b) {
+  const da = distanceKm(userLoc.lat, userLoc.lng, a.lat, a.lng);
+  const db = distanceKm(userLoc.lat, userLoc.lng, b.lat, b.lng);
+  return da - db || a.date.localeCompare(b.date) || a.time.localeCompare(b.time);
+}
+
+// Only asks for the visitor's location when they pick "Nearest to me", not when the page loads.
+sortSelect.addEventListener("change", () => {
+  sortNote.textContent = "";
+  if (sortSelect.value === "date" || userLoc) {
+    sortBy = sortSelect.value;
+    if (loaded) render();
+    return;
+  }
+  if (!navigator.geolocation) return locationFailed("Your browser can't share your location.");
+
+  sortNote.textContent = "Finding your location…";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      sortBy = "nearest";
+      sortNote.textContent = "";
+      if (loaded) render();
+    },
+    () => locationFailed("Couldn't get your location, so events are sorted by date."),
+    { timeout: 10000, maximumAge: 600000 }   // give up after 10 seconds; reuse a location up to 10 minutes old
+  );
+});
+
+// Falls back to sorting by date when the location isn't available or the visitor says no.
+function locationFailed(message) {
+  sortSelect.value = "date";
+  sortBy = "date";
+  sortNote.textContent = message;
+  if (loaded) render();
+}
 // True if every word typed appears in the event's name or venue, in any order.
 // So "bills dolphins" finds "Buffalo Bills vs. Miami Dolphins".
 function matches(ev, words) {
@@ -93,8 +143,9 @@ function eventCard(ev) {
 function render() {
   // Filter step: keep events that match the search.
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const list = allEvents.filter((ev) => matches(ev, words));   // already sorted by date and time by the backend
-
+  let list = allEvents.filter((ev) => matches(ev, words));   // already sorted by date and time by the backend
+  // Sort step: re-sort only for "Nearest to me". The date order from the backend is the default.
+  if (sortBy === "nearest" && userLoc) list = [...list].sort(compareNearest);
   container.replaceChildren();
   if (!list.length) {
     container.append(gridNote(words.length
